@@ -296,20 +296,6 @@ head(ct)
 ct.filtered <- ct
 
 ### Grouping Emissions that looks the same --------------------------------
-
-
-# ct.filtered$A <- rowSums(ct[,c('E5','E10','E25','E8','E2','E12')])
-# ct.filtered$A <- ifelse(ct.filtered$A >= 1, 1, 0)  
-# ct.filtered$M1 <- rowSums(ct[,c('E14','E11','E9','E17','E15','E18','E4')])
-# ct.filtered$M1 <- ifelse(ct.filtered$M1 >= 1, 1, 0)  
-# ct.filtered$M2 <- rowSums(ct[,c('E7','E24','E19','E6','E20','E23','E22','E26')])
-# ct.filtered$M2 <- ifelse(ct.filtered$M2 >= 1, 1, 0) 
-# ct.filtered$R <- rowSums(ct[,c('E27','E1')])
-# ct.filtered$R <- ifelse(ct.filtered$R >= 1, 1, 0)
-# # For 'E21','E16','E0','E3','E13' Emissions included in "Neutral"
-# ct.filtered$N <- ifelse(rowSums(ct.filtered[,c('A', 'M1', 'M2', 'R')] == 0) == 4, 1, 0)
-
-############ Version 05 March 2025
 ct.filtered$TSS <- rowSums(ct[,c('E5','E10','E12')])
 ct.filtered$TSS <- ifelse(ct.filtered$TSS >= 1, 1, 0)  
 ct.filtered$GENE <- rowSums(ct[,c('E8','E2','E7','E9','E25')])
