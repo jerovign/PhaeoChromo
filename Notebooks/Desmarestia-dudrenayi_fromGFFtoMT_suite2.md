@@ -1,10 +1,5 @@
 ---
-title: "MASTER table for Desmarestia dudresnayi (suite)"
-format:
-  pdf: default
-  html:
-    self-contained: true
-    toc: true
+"MASTER table for Desmarestia dudresnayi"
 ---
 
 ```{r setup}
