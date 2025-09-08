@@ -1,9 +1,4 @@
----
-title: "MASTER table for Schizocladia ischiensis"
-format:
-  html: default
-  pdf: default
----
+# MASTER table for Schizocladia ischiensis
 
 ### Preface
 This notebook aims to keep track of how I made the MASTER TABLE that is used for all downstream analyses.
