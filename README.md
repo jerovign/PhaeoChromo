@@ -21,13 +21,13 @@ We investigate how chromatin landscapes emerged and diversified across multiple 
 - uncover **lineage- and sex-specific chromatin dynamics**,
 - and explore their role in **sex chromosome evolution**.
 
-## Repository contents
+## Repository orgnazation
 
-* `Scripts/` — R, Python, bash scripts for data processing, chromatin signature assignment, statistical analyses and plots.
+* `Scripts/` — Other R, Python, bash scripts used for specific tasks - written on the subfolder.
 
-* `Data/` — Processed data tables (containing list of genes, their expression, signatures and other details).
+* `01_Make_tables_from_geneID_to_chromatin-signatures/` — Notebooks describing the processed data tables (containing list of genes, their expression, chromatin signature assignment and other details).
 
-* `Notebooks/` — Notebooks explaining the workflows for data processing.
+* `02_Make_chromatin_states_with_hiHMM_software/` — Notebooks explaining the workflow for making input files for hiHMM and running the software.
 
 ## Requirements
 
