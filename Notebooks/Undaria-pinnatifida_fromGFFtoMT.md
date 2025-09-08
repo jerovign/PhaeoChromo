@@ -35,13 +35,6 @@ sed -E 's/;(\s*)$/\1/' PUBLIC_Undaria-pinnatifida_MALE.jv3.gtf > PUBLIC_Undaria-
 
 
 #### Set up
-```{r setup}
-# Setting up environment
-library(here)  # Optional but recommended for better path management
-knitr::opts_knit$set(root.dir = "/home/jeromine/Documents/Scripts_Rstudio/MASTER_TABLES")
-knitr::opts_chunk$set(echo = TRUE)
-```
-
 ```{r, message = FALSE}
 # Loading lib -------------------------------------------------------------
 library(rtracklayer)
@@ -186,13 +179,8 @@ master_table$peak_K79.Male <- ifelse(seq_along(master_table$gene_id) %in% queryH
 # ---------------------------------------------
 
 ```{r, warning=FALSE, message=FALSE}
-## Step 1: Source the script that generates volcano.data ------------------------
-## volcano.data is obtain from DESeq2, a script not included here.
-# source("/home/jeromine/Documents/Scripts_Rstudio/DESeq2/code/deseq_Undaria-pinnatifida.R")
-# load("/home/jeromine/Documents/Scripts_Rstudio/DESeq2/output/volcano.data_Undaria-pinnatifida.RData")
-####################################################################
-## RNA-seq analysis of Undaria pinnatifida between male and female
-####################################################################
+## Step 1: Generates volcano.data i.e. RNA-seq analysis of Undaria pinnatifida between male and female
+
 #source("https://bioconductor.org/biocLite.R")
 library("pheatmap")
 library("RColorBrewer")
@@ -203,7 +191,7 @@ library("ComplexHeatmap")
 library("ggplot2")
 library("tidyr")
 
-#### #### ----- ----- #### #### ----- ----- #### #### ----- ----- #### #### ----- ----- #### #### ----- ----- run DESeq2
+###run DESeq2
 ## --- read in counts and info
 countsToUse <- read.delim("./data/my_RNAseq_data/Undaria-pinnatifida/salmon.merged.gene_counts.tsv", header = T, as.is = T)
 # countsToUse <- countsToUse[,c(1,2,3,4,6,5,7,8)] #if reorder needed
@@ -236,7 +224,7 @@ ggsave(filename = "plotPCA_RNAseqx3_Undaria-pinnatifida.pdf",
        # width=10, height=10, 
        path="./output")
 
-#### #### ----- ----- #### #### ----- ----- #### #### ----- ----- #### #### ----- ----- #### #### ----- ----- perform the comparisons
+### perform the comparisons
 ## import TPM table
 TPM <- read.delim("./data/my_RNAseq_data/Undaria-pinnatifida/salmon.merged.gene_tpm.tsv", header = T)
 colnames(TPM)[1] <- "ID"
@@ -247,19 +235,19 @@ TPM <- TPM[,-2]
 TPM$Female <- rowMeans(TPM[,2:4])
 TPM$Male <- rowMeans(TPM[,5:7])
 
-#### #### ----- ----- #### #### ----- ----- #### #### ----- ----- summarise total genes detectable
+###summarise total genes detectable
 x <- TPM
 rownames(x) <- x$ID
 x <- x[,-1]
 row_sub = apply(x, 1, function(row) all(row != 0 ))
 TPM.detected <- TPM[row_sub,]
 
-#### #### ----- ----- #### #### ----- ----- #### #### ----- ----- #### #### ----- ----- #### #### ----- ----- perform the DESEQ comparisons
+###perform the DESEQ comparisons
 contrasts <- as.data.frame(results(run.dds, contrast = c("genotype","Male", "Female")))  ## use <lfcShrink> instead to give the MLE log2FC
 contrasts$ID <- rownames(contrasts)
 contrasts <- merge(contrasts, TPM, by = "ID")
 
-#### #### ----- ----- #### #### ----- ----- #### #### ----- ----- #### #### ----- ----- #### #### ----- ----- VOLCANO PLOTS
+##VOLCANO PLOTS
 
 volcano.data <- contrasts
 volcano.data$colour <- "dark gray"
@@ -301,7 +289,7 @@ ggsave(filename = "./ouptut/02_volcano_plots/volcanoplot_Undaria-pinnatifida.pdf
        width=15, height=15,
        path="./output")
 
-#### #### ----- ----- #### #### ----- ----- #### #### ----- ----- #### #### ----- ----- #### #### ----- ----- all DEGs heatmap
+###all DEGs heatmap
 ### ------------ plot TPM zscore of ALL DEGs
 
 updown <- subset(contrasts, padj <= 0.05 & (log2FoldChange > 1 | log2FoldChange < -1))
