@@ -23,11 +23,11 @@ We investigate how chromatin landscapes emerged and diversified across multiple 
 
 ## Repository orgnazation
 
-* `Scripts/` — Other R, Python, bash scripts used for specific tasks - written on the subfolder.
-
 * `01_Make_tables_from_geneID_to_chromatin-signatures/` — Notebooks describing the processed data tables (containing list of genes, their expression, chromatin signature assignment and other details).
 
 * `02_Make_chromatin_states_with_hiHMM_software/` — Notebooks explaining the workflow for making input files for hiHMM and running the software.
+
+* `Scripts/` — Other R, Python, bash scripts used for specific tasks - written on the subfolder.
 
 ## Requirements
 
