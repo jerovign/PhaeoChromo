@@ -188,8 +188,144 @@ master_table$peak_K79.Male <- ifelse(seq_along(master_table$gene_id) %in% queryH
 ```{r, warning=FALSE, message=FALSE}
 ## Step 1: Source the script that generates volcano.data ------------------------
 ## volcano.data is obtain from DESeq2, a script not included here.
-source("/home/jeromine/Documents/Scripts_Rstudio/DESeq2/code/deseq_Undaria-pinnatifida.R")
-load("/home/jeromine/Documents/Scripts_Rstudio/DESeq2/output/volcano.data_Undaria-pinnatifida.RData")
+# source("/home/jeromine/Documents/Scripts_Rstudio/DESeq2/code/deseq_Undaria-pinnatifida.R")
+# load("/home/jeromine/Documents/Scripts_Rstudio/DESeq2/output/volcano.data_Undaria-pinnatifida.RData")
+####################################################################
+## RNA-seq analysis of Undaria pinnatifida between male and female
+####################################################################
+#source("https://bioconductor.org/biocLite.R")
+library("pheatmap")
+library("RColorBrewer")
+library("DESeq2")
+library("dplyr")
+library("tximport")
+library("ComplexHeatmap")
+library("ggplot2")
+library("tidyr")
+
+#### #### ----- ----- #### #### ----- ----- #### #### ----- ----- #### #### ----- ----- #### #### ----- ----- run DESeq2
+## --- read in counts and info
+countsToUse <- read.delim("./data/my_RNAseq_data/Undaria-pinnatifida/salmon.merged.gene_counts.tsv", header = T, as.is = T)
+# countsToUse <- countsToUse[,c(1,2,3,4,6,5,7,8)] #if reorder needed
+colnames(countsToUse)[c(3:8)] <- c("UpF1", "UpF2", "UpF3", "UpM1", "UpM2", "UpM3")
+rownames(countsToUse) <-countsToUse$gene_id
+countsToUse <- countsToUse[,-c(1,2)]
+countsToUse <- as.matrix(countsToUse)
+countsToUse <- subset(countsToUse, rowMax(countsToUse) >= 10)   #### this is optional
+
+colData <- data.frame(genotype = c(rep("Female",3), rep("Male",3)), 
+                      row.names = colnames(countsToUse) )
+
+dds <- DESeqDataSetFromMatrix(round(countsToUse), colData = colData, design=~genotype)
+dds <- estimateSizeFactors(dds)
+run.dds <- DESeq(dds)
+
+#pdf("/ebio/abt5_projects/", width = 8, height = 8)
+rld <- rlog(run.dds, blind=FALSE)
+pcaData <- plotPCA(rld, intgroup=c("genotype"), returnData=TRUE)
+percentVar <- round(100 * attr(pcaData, "percentVar"))
+pcaData$genotype <- factor(pcaData$genotype, c("Male","Female"))
+plotPCA <- ggplot(pcaData, aes(PC1, PC2)) +
+  geom_point(size=3, aes(color=genotype)) +
+  scale_color_manual(values =  c("#1f78b4", "#fb8072")) +
+  xlab(paste0("PC1: ",percentVar[1],"% variance")) +
+  ylab(paste0("PC2: ",percentVar[2],"% variance"))
+ggsave(filename = "plotPCA_RNAseqx3_Undaria-pinnatifida.pdf", 
+       plot = plotPCA,
+       #  units = "cm", 
+       # width=10, height=10, 
+       path="./output")
+
+#### #### ----- ----- #### #### ----- ----- #### #### ----- ----- #### #### ----- ----- #### #### ----- ----- perform the comparisons
+## import TPM table
+TPM <- read.delim("./data/my_RNAseq_data/Undaria-pinnatifida/salmon.merged.gene_tpm.tsv", header = T)
+colnames(TPM)[1] <- "ID"
+# TPM <- TPM[,c(1,2,3,4,6,5,7,8)]
+colnames(TPM)[c(3:8)] <- c("UpF1", "UpF2", "UpF3", "UpM1", "UpM2", "UpM3")
+TPM <- TPM[,-2]
+
+TPM$Female <- rowMeans(TPM[,2:4])
+TPM$Male <- rowMeans(TPM[,5:7])
+
+#### #### ----- ----- #### #### ----- ----- #### #### ----- ----- summarise total genes detectable
+x <- TPM
+rownames(x) <- x$ID
+x <- x[,-1]
+row_sub = apply(x, 1, function(row) all(row != 0 ))
+TPM.detected <- TPM[row_sub,]
+
+#### #### ----- ----- #### #### ----- ----- #### #### ----- ----- #### #### ----- ----- #### #### ----- ----- perform the DESEQ comparisons
+contrasts <- as.data.frame(results(run.dds, contrast = c("genotype","Male", "Female")))  ## use <lfcShrink> instead to give the MLE log2FC
+contrasts$ID <- rownames(contrasts)
+contrasts <- merge(contrasts, TPM, by = "ID")
+
+#### #### ----- ----- #### #### ----- ----- #### #### ----- ----- #### #### ----- ----- #### #### ----- ----- VOLCANO PLOTS
+
+volcano.data <- contrasts
+volcano.data$colour <- "dark gray"
+volcano.data$colour[volcano.data$`log2FoldChange` < -1 & volcano.data$`padj` <= 0.05] <- "#D73027"
+volcano.data$colour[volcano.data$`log2FoldChange` > 1 & volcano.data$`padj` <= 0.05] <- "#4575B4"
+volcano.data$bias <- NA
+volcano.data$bias[volcano.data$`log2FoldChange` < -1 & volcano.data$`padj` <= 0.05] <- "Female-biased genes"
+volcano.data$bias[volcano.data$`log2FoldChange` > 1 & volcano.data$`padj` <= 0.05] <- "Male-biased genes"
+
+# Create a data frame with the subset information
+subset_data <- data.frame(
+  direction = c("Female-biased genes", "Male-biased genes"),
+  count = c(
+    nrow(subset(volcano.data, log2FoldChange < -1 & padj <= 0.05)),
+    nrow(subset(volcano.data, log2FoldChange > 1 & padj <= 0.05))
+  )
+)
+
+# Create the ggplot
+v <- ggplot(volcano.data, aes(x = log2FoldChange, y = -log10(padj), col = colour)) +
+  geom_point(size = 0.5) +
+  labs(
+    title = "Differential gene expression analysis",
+    x = "log2FoldChange",
+    y = "-log10(adj pval)",
+    caption = "Red genes are more expressed in the female and blue genes are more expressed in the male") +
+  xlim(-20, 20) +
+  ylim(0, 160) +
+  geom_text(data = subset_data, aes(label = direction, x = c(-15, 15), y = 95), col = c("#D73027", "#4575B4"), size = 4) +
+  geom_text(data = subset_data, aes(label = count, x = c(-15, 15), y = 85), col = c("#D73027", "#4575B4"), size = 5) +
+  geom_hline(yintercept = 1.3, linetype = "dashed", colour = "#2a2727") +
+  geom_vline(xintercept = c(-1, 1), linetype = "dashed", colour = "#2a2727") +
+  scale_color_identity() +
+  theme_minimal()
+
+ggsave(filename = "./ouptut/02_volcano_plots/volcanoplot_Undaria-pinnatifida.pdf", 
+       plot = last_plot(),
+        units = "cm",
+       width=15, height=15,
+       path="./output")
+
+#### #### ----- ----- #### #### ----- ----- #### #### ----- ----- #### #### ----- ----- #### #### ----- ----- all DEGs heatmap
+### ------------ plot TPM zscore of ALL DEGs
+
+updown <- subset(contrasts, padj <= 0.05 & (log2FoldChange > 1 | log2FoldChange < -1))
+
+matrix <- subset(TPM, ID %in% updown$ID)[,c(2:7)]
+rownames(matrix) <- updown$ID
+
+matrix <- t(scale(t(matrix), center = T, scale = T))
+colours <- rev(brewer.pal(n = 9, name = "RdGy"))
+
+pdf("./output/02_volcano_plots/plotheatmap_Undaria-pinnatifida.pdf", width = 6, height = 6)
+pheatmap(matrix, 
+         cluster_rows = T,
+         clustering_method = "ward.D2",
+         cluster_cols = T,
+         show_rownames = F,
+         scale = "none",
+         border_color = NA, 
+         color = colours,
+         #breaks = breaksList,
+         fontsize = 12)
+dev.off()
+save(volcano.data, file='./output/02_volcano_plots/volcano.data_Undaria-pinnatifida.RData')
+
 head(volcano.data)
 print(v)
 
