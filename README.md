@@ -27,6 +27,8 @@ We investigate how chromatin landscapes emerged and diversified across multiple 
 
 * `02_Make_chromatin_states_with_hiHMM_software/` — Notebooks explaining the workflow for making input files for hiHMM and running the software.
 
+* `03_Chromatin_signature_evolution/` - Notebooks explaining the workflows for comparative analysis of chromatin signatures across species. This also includes gene age, orphan gene and expression variability analysis for every species.
+
 * `Scripts/` — Other R, Python, bash scripts used for specific tasks - written on the subfolder.
 
 ## Requirements
