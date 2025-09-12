@@ -1,0 +1,658 @@
+---
+title: "H3K79me2 association with expression dynamics"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+Here, I load the supplementary table of hPTM signatures and examine the association between the H3K79me2 and gene expression.
+
+```{r warning=FALSE, message=FALSE}
+library(tidyverse)
+library(ggrastr) # to rasterise points in ggplot
+library(readxl) # to read excel files
+library(scales) # for pretty breaks
+```
+
+```{r warning=FALSE, message=FALSE}
+readxl::excel_sheets("data/dataset_S3_master_tables.xlsx")
+Ec_k79 <- readxl::read_xlsx("data/dataset_S3_master_tables.xlsx", sheet = "Ectocarpus") |>
+        dplyr::select(gene_id, dplyr::contains("TPM"), dplyr::contains("peak_K79"), rank)
+Ddud_k79 <- readxl::read_xlsx("data/dataset_S3_master_tables.xlsx", sheet = "Desmarestia-dudresnayi") |>
+        dplyr::select(gene_id, dplyr::contains("TPM"), dplyr::contains("peak_K79"), rank)
+Dher_k79 <- readxl::read_xlsx("data/dataset_S3_master_tables.xlsx", sheet = "Desmarestia-herbacea") |>
+        dplyr::select(gene_id, dplyr::contains("TPM"), dplyr::contains("peak_K79"), rank)
+Und_k79 <- readxl::read_xlsx("data/dataset_S3_master_tables.xlsx", sheet = "Undaria") |>
+        dplyr::select(gene_id, dplyr::contains("TPM"), dplyr::contains("peak_K79"), rank)
+Spro_k79 <- readxl::read_xlsx("data/dataset_S3_master_tables.xlsx", sheet = "Scitosyphon") |>
+        dplyr::select(gene_id, dplyr::contains("TPM"), dplyr::contains("peak_K79"), rank)
+Si_k79 <- readxl::read_xlsx("data/dataset_S3_master_tables.xlsx", sheet = "Schizocladia") |>
+        dplyr::select(gene_id, dplyr::contains("TPM"), dplyr::contains("peak_K79"), rank)
+```
+
+Note: Scytosiphon was misspelt in the table
+
+```{r}
+preprocess_ps_sig <- function(Species_ps){
+        Species_ps.filt <- Species_ps |> 
+                tidyr::drop_na() |>
+                dplyr::mutate(rank = as.numeric(rank)) |>
+                tidyr::drop_na(rank)
+        if(any(colnames(Species_ps.filt) %in% c("peak_K79.Female", "peak_K79.Male"))){
+                Species_ps.filt2 <- 
+                        Species_ps.filt |>
+                        dplyr::mutate(Signature.Female = factor(
+                                Signature.Female, levels = paste0('S',1:16))) |>
+                        dplyr::mutate(Signature.Male = factor(
+                                Signature.Male, levels = paste0('S',1:16)))
+        }else{
+                Species_ps.filt2 <- 
+                        Species_ps.filt |>
+                        dplyr::mutate(Signature = factor(
+                                Signature, levels = paste0('S',1:16)))
+        }
+        return(Species_ps.filt2)
+}
+
+color_table <-
+        tibble::tibble(
+                Signature = paste0('S',1:16),
+                Colour = c("#a31d21", "#e43a30", "#f36f57", "#f8a68d", "#fddfd1", "#1b733b",
+            "#2daf66", "#6ec283", "#aed9b1", "#9392c8", "#bfbfdf", "#e9eef8",
+            "#2a74bb", "#61abd7", "#afd1e5", "#999999")
+        )
+
+plot_style <- function(p_in){
+        p_out <-
+                p_in +
+                ggrastr::rasterise(ggplot2::geom_jitter(width = 0.3, alpha = 0.1)) +
+                ggplot2::geom_boxplot(width = 0.5, size = 0.8, outliers = FALSE, colour = "black") +
+                ggplot2::theme_classic() +
+                ggplot2::scale_colour_manual(values = c("#297BBB", "grey80")) +
+                # ggplot2::theme(legend.position = "none") +
+                ggplot2::guides(colour = guide_legend(override.aes = list(alpha = 1))) +
+                # ggplot2::coord_flip() +
+                ggplot2::scale_y_continuous(breaks = scales::breaks_pretty())
+        return(p_out)
+}
+
+plot_style2 <- function(p_in){
+        p_out <-
+                p_in +
+                ggrastr::rasterise(ggplot2::geom_jitter(width = 0.3, alpha = 0.1)) +
+                ggplot2::geom_boxplot(width = 0.5, size = 0.8, outliers = FALSE, colour = "black") +
+                ggplot2::theme_classic() +
+                ggplot2::scale_colour_manual(values = c("#297BBB", "grey80")) +
+                # ggplot2::theme(legend.position = "none") +
+                ggplot2::guides(colour = guide_legend(override.aes = list(alpha = 1))) +
+                # ggplot2::coord_flip() +
+                ggplot2::scale_y_continuous(breaks = scales::breaks_pretty())
+        return(p_out)
+}
+```
+
+# H3K79me2 and mean expression.
+
+Ectocarpus
+
+```{r warning=FALSE, message=FALSE, fig.width=3.5, fig.height=3}
+Ec_k79.filt <-
+        Ec_k79 |>
+        tidyr::drop_na()
+        
+# expression
+Ec_k79.filt |>
+        ggplot2::ggplot(aes(x = peak_K79.Female, colour = peak_K79.Female, y = log2_TPM_plus_1.Female)) |>
+        plot_style() +
+        ggplot2::labs(x = "H3K79me2", y = "log(TPM+1)",
+                      title = "Ectocarpus", subtitle = "female")
+Ec_k79.filt |>
+        ggplot2::ggplot(aes(x = peak_K79.Male, colour = peak_K79.Male, y = log2_TPM_plus_1.Male)) |>
+        plot_style() +
+        ggplot2::labs(x = "H3K79me2", y = "log(TPM+1)",
+                      title = "Ectocarpus", subtitle = "male")
+```
+
+
+Next, all species.
+
+```{r warning=FALSE, message=FALSE}
+all_k79.filt <-
+        Ec_k79 |> dplyr::mutate(Sp = "EctSp7") |>
+        rbind(Spro_k79 |> dplyr::mutate(Sp = "ScyPro")) |>
+        rbind(Und_k79 |> dplyr::mutate(Sp = "UndPin")) |>
+        rbind(Dher_k79 |> dplyr::mutate(Sp = "DesHer")) |>
+        dplyr::select(gene_id, 
+                      log2_TPM_plus_1 = log2_TPM_plus_1.Female,
+                      peak_K79 = peak_K79.Female, 
+                      Sp) |>
+        rbind(Ddud_k79 |> dplyr::mutate(Sp = "DesDud") |> dplyr::select(1,3,4,6)) |>
+        rbind(Si_k79 |> dplyr::mutate(Sp = "SchIsc") |> dplyr::select(1,3,4,6)) |>
+        tidyr::drop_na()
+```
+
+
+```{r warning=FALSE, message=FALSE, fig.width=6, fig.height=3}
+all_k79.filt |>
+        dplyr::mutate(Sp = factor(Sp, levels = c(
+                "EctSp7", "ScyPro", "UndPin", "DesHer", "DesDud", "SchIsc"
+        ))) |>
+        dplyr::mutate(peak_K79 = case_when(
+                peak_K79 == TRUE ~ "yes",
+                .default = "no"
+        )) |>
+        dplyr::mutate(peak_K79 = factor(peak_K79, levels = c("yes", "no"))) |>
+        ggplot2::ggplot(aes(x = peak_K79, colour = peak_K79, y = log2_TPM_plus_1)) |>
+        plot_style() +
+        ggplot2::facet_wrap(.~Sp, nrow = 1) +
+        ggplot2::labs(x = "", y = "log2(TPM+1)", colour = "H3K79me2 mark") +
+        ggplot2::theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(),
+                       legend.position = "top") +
+        ggpubr::stat_kruskal_test(label = "p.adj", size = 2.5) +
+        EnvStats::stat_n_text(size = 2.5)
+```
+
+
+```{r warning=FALSE, message=FALSE, fig.width=6, fig.height=3}
+all_k79.filt.TPM <-
+        Ec_k79 |> dplyr::mutate(Sp = "EctSp7") |>
+        rbind(Spro_k79 |> dplyr::mutate(Sp = "ScyPro")) |>
+        rbind(Und_k79 |> dplyr::mutate(Sp = "UndPin")) |>
+        rbind(Dher_k79 |> dplyr::mutate(Sp = "DesHer")) |>
+        dplyr::select(gene_id, 
+                      TPM = TPM.Female,
+                      peak_K79 = peak_K79.Female, 
+                      Sp) |>
+        rbind(Ddud_k79 |> dplyr::mutate(Sp = "DesDud") |> dplyr::select(1,2,4,6)) |>
+        rbind(Si_k79 |> dplyr::mutate(Sp = "SchIsc") |> dplyr::select(1,2,4,6)) |>
+        tidyr::drop_na()
+
+
+all_k79.filt.TPM.filt <-
+        all_k79.filt.TPM |>
+        dplyr::mutate(TPM_quantile = ntile(TPM, 4), .by = Sp)
+        # dplyr::mutate(TPM_quantile = dplyr::case_when(
+        #         TPM == 0 ~ 0,
+        #         TPM > 0 ~ ntile(TPM, 4)
+        # ),
+        # .by = Sp)
+
+all_k79.filt.TPM.filt |>
+        dplyr::mutate(Sp = factor(Sp, levels = c(
+                "EctSp7", "ScyPro", "UndPin", "DesHer", "DesDud", "SchIsc"
+        ))) |>
+        dplyr::mutate(peak_K79 = case_when(
+                peak_K79 == TRUE ~ "yes",
+                .default = "no"
+        )) |>
+        # dplyr::mutate(peak_K79 = factor(peak_K79, levels = c("yes", "no"))) |>
+        ggplot2::ggplot(aes(x = factor(TPM_quantile), fill = peak_K79)) +
+        ggplot2::geom_bar(position = "fill", colour = "black") +
+        ggplot2::scale_y_continuous(labels = scales::percent_format()) +
+        ggplot2::labs(
+                x = "TPM quantile",
+                y = "H3K79me2 mark (%)",
+                fill = "H3K79me2 mark"
+                ) +
+        ggplot2::theme_classic() +
+        ggplot2::scale_fill_manual(values = c("grey80", "#297BBB")) +
+        ggplot2::facet_wrap(.~Sp, nrow = 1)
+```
+
+
+What about male patterns?
+
+#### For males
+
+```{r warning=FALSE, message=FALSE}
+all_k79.filt.M <-
+        Ec_k79 |> dplyr::mutate(Sp = "EctSp7") |>
+        rbind(Spro_k79 |> dplyr::mutate(Sp = "ScyPro")) |>
+        rbind(Und_k79 |> dplyr::mutate(Sp = "UndPin")) |>
+        rbind(Dher_k79 |> dplyr::mutate(Sp = "DesHer")) |>
+        dplyr::select(gene_id, 
+                      log2_TPM_plus_1 = log2_TPM_plus_1.Male,
+                      peak_K79 = peak_K79.Male, 
+                      Sp) |>
+        # rbind(Ddud_k79 |> dplyr::mutate(Sp = "DesDud") |> dplyr::select(1,3,4,6)) |>
+        # rbind(Si_k79 |> dplyr::mutate(Sp = "SchIsc") |> dplyr::select(1,3,4,6)) |>
+        tidyr::drop_na()
+```
+
+
+```{r warning=FALSE, message=FALSE, fig.width=4.5, fig.height=3}
+all_k79.filt.M |>
+        dplyr::mutate(Sp = factor(Sp, levels = c(
+                "EctSp7", "ScyPro", "UndPin", "DesHer", "DesDud", "SchIsc"
+        ))) |>
+        dplyr::mutate(peak_K79 = case_when(
+                peak_K79 == TRUE ~ "yes",
+                .default = "no"
+        )) |>
+        dplyr::mutate(peak_K79 = factor(peak_K79, levels = c("yes", "no"))) |>
+        ggplot2::ggplot(aes(x = peak_K79, colour = peak_K79, y = log2_TPM_plus_1)) |>
+        plot_style() +
+        ggplot2::facet_wrap(.~Sp, nrow = 1) +
+        ggplot2::labs(x = "", y = "log2(TPM+1)", colour = "H3K79me2 mark") +
+        ggplot2::theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(),
+                       legend.position = "top") +
+        ggpubr::stat_kruskal_test(label = "p.adj", size = 2.5) +
+        EnvStats::stat_n_text(size = 2.5)
+```
+
+
+The resulting pattern is the same.
+
+Overall, the expression profiles suggest that we cannot look at the whole gene. From the metaplots in the MS, we need to focus on the TSS.
+
+### TSS H3K79me2 marks
+
+```{r warning=FALSE, message=FALSE}
+library(rtracklayer)
+library(GenomicRanges)
+library(ChIPpeakAnno)
+library(reshape2)
+```
+
+```
+# this is using
+# /ebio/abt5_projects/PhaeoChromo/data/early-stage_evochromo/
+# Ec
+# Spro
+# Und
+# Dher
+# Ddud
+# Si
+```
+
+Due to issues in the gff files, I ran gffread on them.
+
+```bash
+# gffread --keep-genes -E Desmarestia-herbacea.reference.gt.AGAT.gff -o convert_gffread/Desmarestia-herbacea.reference.gt.AGAT.gffread.gff
+# gffread --keep-genes -E Scytosiphon-promiscuus_MALE.chr.gff -o convert_gffread/Scytosiphon-promiscuus_MALE.chr.gffread.gff
+# gffread --keep-genes -E Schizocladia-ischiensis.AGAT.gtf -o convert_gffread/Schizocladia-ischiensis.AGAT.gffread.gtf
+```
+
+We can load in the annotation.
+
+```{r warning=FALSE, message=FALSE}
+genes.Ec <- 
+        rtracklayer::import.gff("data/annotation/Ec32_V5.longest_mRNA.SDR_F.AGAT.mod.gtf") |>
+        subset(type == "mRNA")
+genes.Und <- 
+        rtracklayer::import("data/annotation/PUBLIC_Undaria-pinnatifida_MALE.jv3.gtf") |>
+        subset(type == "transcript")
+genes.Ddud <- 
+        rtracklayer::import("data/annotation/Desmarestia-dudresnayi.cleaned2025.jv.gffread.gtf")  |>
+        subset(type == "transcript") 
+genes.Spro <- 
+        rtracklayer::import("data/annotation/convert_gffread/Scytosiphon-promiscuus_MALE.chr.gffread.gff") |>
+        subset(type == "mRNA") 
+genes.Dher <- 
+        rtracklayer::import("data/annotation/convert_gffread/Desmarestia-herbacea.reference.gt.AGAT.gffread.gff") |>
+        subset(type == "mRNA") 
+genes.Si <- 
+        rtracklayer::import("data/annotation/convert_gffread/Schizocladia-ischiensis.AGAT.gffread.gtf", format = "gff") |>
+        subset(type == "gene") 
+```
+
+Now, load in the MACS2 peaks
+
+```{r warning=FALSE, message=FALSE}
+###### ----------- load in the MACS2 peaks
+path <- "data/K79_data/"
+files <- dir(path, "Peak")
+files.Ddud <- files[1]
+files.Dher.f <- files[2]
+files.Dher.m <- files[3]
+files.Ec.f <- files[4]
+files.Ec.m <- files[5]
+files.Si <- files[6]
+files.Spro.f <- files[7]
+files.Spro.m <- files[8]
+files.Und.f <- files[9]
+files.Und.m <- files[10]
+```
+
+```{r warning=FALSE, message=FALSE}
+peak_list.Ddud <- sapply(file.path(path, files.Ddud), toGRanges, format="broadPeak")
+peak_list.Dher.f <- sapply(file.path(path, files.Dher.f), toGRanges, format="broadPeak")
+peak_list.Dher.m <- sapply(file.path(path, files.Dher.m), toGRanges, format="broadPeak")
+peak_list.Ec.f <- sapply(file.path(path, files.Ec.f), toGRanges, format="broadPeak")
+peak_list.Ec.m <- sapply(file.path(path, files.Ec.m), toGRanges, format="broadPeak")
+peak_list.Si <- sapply(file.path(path, files.Si), toGRanges, format="broadPeak")
+peak_list.Spro.f <- sapply(file.path(path, files.Spro.f), toGRanges, format="broadPeak")
+peak_list.Spro.m <- sapply(file.path(path, files.Spro.m), toGRanges, format="broadPeak")
+peak_list.Und.f <- sapply(file.path(path, files.Und.f), toGRanges, format="broadPeak")
+peak_list.Und.m <- sapply(file.path(path, files.Und.m), toGRanges, format="broadPeak")
+```
+
+Function to find the overlaps on the TSS
+
+```{r warning=FALSE, message=FALSE}
+library(GenomicRanges)
+# genes_Sp = genes.Und
+# peak_list_Sp = peak_list.Und
+
+find_overlap_tss <- function(genes_Sp, peak_list_Sp, window_around_tss = 1){
+        # 1. Get TSS from gene annotations
+        TSS <- resize(genes_Sp, width = 1, fix = "start")  # TSS is start of gene regardless of strand
+        TSS[strand(TSS) == "-"] <- resize(TSS[strand(TSS) == "-"], width = 1, fix = "end")  # adjust for minus strand
+        
+        # 2. Define a window around TSS (e.g. ±500 bp)
+        TSS_window <- resize(TSS, width = window_around_tss, fix = "center")  # +/-500 bp
+        
+        # 3. Extract the GRanges of peaks
+        peaks <- peak_list_Sp[[1]]
+        
+        # 4. Find overlaps
+        hits <- findOverlaps(peaks, TSS_window)
+        
+        # 5. Get overlapping peaks and/or genes
+        # overlapping_peaks <- peaks[queryHits(hits)]
+        overlapping_genes <- genes_Sp[subjectHits(hits)]
+        return(overlapping_genes)
+}
+```
+
+Find overlaps on the TSS.
+
+```{r warning=FALSE, message=FALSE}
+overlap_Ec.f <- find_overlap_tss(genes.Ec, peak_list.Ec.f, window_around_tss = 1)
+overlap_Ec.m <- find_overlap_tss(genes.Ec, peak_list.Ec.m, window_around_tss = 1)
+overlap_Spro.f <- find_overlap_tss(genes.Spro, peak_list.Spro.f, window_around_tss = 1)
+overlap_Spro.m <- find_overlap_tss(genes.Spro, peak_list.Spro.m, window_around_tss = 1)
+overlap_Und.f <- find_overlap_tss(genes.Und, peak_list.Und.f, window_around_tss = 1)
+overlap_Und.m <- find_overlap_tss(genes.Und, peak_list.Und.m, window_around_tss = 1)
+overlap_Dher.f <- find_overlap_tss(genes.Dher, peak_list.Dher.f, window_around_tss = 1)
+overlap_Dher.m <- find_overlap_tss(genes.Dher, peak_list.Dher.m, window_around_tss = 1)
+overlap_Ddud <- find_overlap_tss(genes.Ddud, peak_list.Ddud, window_around_tss = 1)
+overlap_Si <- find_overlap_tss(genes.Si, peak_list.Si, window_around_tss = 1)
+
+
+gene_TSS.Ec.f <- overlap_Ec.f$ID
+gene_TSS.Ec.m <- overlap_Ec.m$ID
+gene_TSS.Spro.f <- overlap_Spro.f$ID
+gene_TSS.Spro.m <- overlap_Spro.m$ID
+gene_TSS.Und.f <- overlap_Und.f$gene_id
+gene_TSS.Und.m <- overlap_Und.m$gene_id
+gene_TSS.Dher.f <- overlap_Dher.f$ID
+gene_TSS.Dher.m <- overlap_Dher.m$ID
+gene_TSS.Ddud <- overlap_Ddud$gene_id
+gene_TSS.Si <- overlap_Si$ID
+```
+
+```{r warning=FALSE, message=FALSE}
+Ec_k79.tss.f <- 
+        Ec_k79 |> 
+        dplyr::mutate(TSS_mark = case_when(gene_id %in% gene_TSS.Ec.f ~ TRUE, .default = FALSE))
+Ec_k79.tss.m <- 
+        Ec_k79 |> 
+        dplyr::mutate(TSS_mark = case_when(gene_id %in% gene_TSS.Ec.m ~ TRUE, .default = FALSE))
+Spro_k79.tss.f <-
+        Spro_k79 |>
+        dplyr::mutate(TSS_mark = case_when(gene_id %in% gene_TSS.Spro.f ~ TRUE, .default = FALSE))
+Spro_k79.tss.m <-
+        Spro_k79 |>
+        dplyr::mutate(TSS_mark = case_when(gene_id %in% gene_TSS.Spro.m ~ TRUE, .default = FALSE))
+Und_k79.tss.f <- 
+        Und_k79 |> 
+        dplyr::mutate(TSS_mark = case_when(gene_id %in% gene_TSS.Und.f ~ TRUE, .default = FALSE))
+Und_k79.tss.m <- 
+        Und_k79 |> 
+        dplyr::mutate(TSS_mark = case_when(gene_id %in% gene_TSS.Und.m ~ TRUE, .default = FALSE))
+Dher_k79.tss.f <- 
+        Dher_k79 |> 
+        dplyr::mutate(TSS_mark = case_when(gene_id %in% gene_TSS.Dher.f ~ TRUE, .default = FALSE))
+Dher_k79.tss.m <- 
+        Dher_k79 |> 
+        dplyr::mutate(TSS_mark = case_when(gene_id %in% gene_TSS.Dher.m ~ TRUE, .default = FALSE))
+Ddud_k79.tss <- 
+        Ddud_k79 |> 
+        dplyr::mutate(TSS_mark = case_when(gene_id %in% gene_TSS.Ddud ~ TRUE, .default = FALSE))
+Si_k79.tss <- 
+        Si_k79 |> 
+        dplyr::mutate(TSS_mark = case_when(gene_id %in% gene_TSS.Si ~ TRUE, .default = FALSE))
+
+all_k79.filt.TPM.tss <-
+        Ec_k79.tss.f |> dplyr::mutate(Sp = "EctSp7") |>
+        rbind(Spro_k79.tss.f |> dplyr::mutate(Sp = "ScyPro")) |>
+        rbind(Und_k79.tss.f |> dplyr::mutate(Sp = "UndPin")) |>
+        rbind(Dher_k79.tss.f |> dplyr::mutate(Sp = "DesHer")) |>
+        dplyr::select(gene_id, 
+                      TPM = TPM.Female,
+                      peak_K79 = peak_K79.Female, 
+                      Sp, TSS_mark) |>
+        rbind(Ddud_k79.tss |> dplyr::mutate(Sp = "DesDud") |> dplyr::select(1,2,4,6,7)) |>
+        rbind(Si_k79.tss |> dplyr::mutate(Sp = "SchIsc") |> dplyr::select(1,2,4,6,7)) |>
+        tidyr::drop_na()
+```
+
+```{r warning=FALSE, message=FALSE, fig.width=6, fig.height=4}
+# full data
+all_k79.filt.TPM.filt.tss <-
+        all_k79.filt.TPM.tss |>
+        dplyr::mutate(TPM_quantile = ntile(TPM, 4), .by = Sp)
+# dplyr::mutate(TPM_quantile = dplyr::case_when(
+#         TPM == 0 ~ 0,
+#         TPM > 0 ~ ntile(TPM, 4)
+# ),
+# .by = Sp)
+
+p_1 <- all_k79.filt.TPM.filt.tss |>
+        dplyr::mutate(Sp = factor(Sp, levels = c(
+                "EctSp7", "ScyPro", "UndPin", "DesHer", "DesDud", "SchIsc"
+        ))) |>
+        dplyr::mutate(peak_K79 = case_when(
+                peak_K79 == TRUE ~ "yes",
+                .default = "no"
+        )) |>
+        # dplyr::mutate(peak_K79 = factor(peak_K79, levels = c("yes", "no"))) |>
+        ggplot2::ggplot(aes(x = factor(TPM_quantile), fill = peak_K79)) +
+        ggplot2::geom_bar(position = "fill", colour = "black") +
+        ggplot2::scale_y_continuous(labels = scales::percent_format()) +
+        ggplot2::labs(
+                x = "TPM quantile",
+                y = "H3K79me2 mark (%)",
+                fill = "H3K79me2 mark"
+        ) +
+        ggplot2::theme_classic() +
+        ggplot2::scale_fill_manual(values = c("grey80", "#297BBB")) +
+        ggplot2::facet_wrap(.~Sp, nrow = 1)
+
+p_2 <- all_k79.filt.TPM.filt.tss |>
+        dplyr::mutate(Sp = factor(Sp, levels = c(
+                "EctSp7", "ScyPro", "UndPin", "DesHer", "DesDud", "SchIsc"
+        ))) |>
+        dplyr::mutate(TSS_mark = case_when(
+                TSS_mark == TRUE ~ "yes",
+                .default = "no"
+        )) |>
+        ggplot2::ggplot(aes(x = factor(TPM_quantile), fill = TSS_mark)) +
+        ggplot2::geom_bar(position = "fill", colour = "black") +
+        ggplot2::scale_y_continuous(labels = scales::percent_format()) +
+        ggplot2::labs(
+                x = "TPM quantile",
+                y = "H3K79me2 mark (%)",
+                fill = "H3K79me2 mark"
+        ) +
+        ggplot2::theme_classic() +
+        ggplot2::scale_fill_manual(values = c("grey80", "#297BBB")) +
+        ggplot2::facet_wrap(.~Sp, nrow = 1)
+
+ggpubr::ggarrange(p_1,p_2,nrow = 2)
+```
+
+```{r warning=FALSE, message=FALSE, fig.width=6, fig.height=3}
+all_k79.filt.TPM.filt.tss |>
+        dplyr::mutate(Sp = factor(Sp, levels = c(
+                "EctSp7", "ScyPro", "UndPin", "DesHer", "DesDud", "SchIsc"
+        ))) |>
+        dplyr::rename(gene = peak_K79, TSS_only = TSS_mark) |>
+        tidyr::pivot_longer(!c(gene_id,TPM,Sp,TPM_quantile), names_to = "mark_type", values_to = "mark") |>
+        dplyr::summarise(p_mark = mean(mark*1), .by = c(TPM_quantile, Sp,mark_type)) |>
+        ggplot2::ggplot(aes(x = TPM_quantile, y = p_mark, group = mark_type)) +
+        ggplot2::geom_col(fill = "#297BBB", colour = "black") +
+        ggplot2::theme_classic() +
+        ggplot2::scale_y_continuous(labels = scales::percent_format()) +
+        ggplot2::labs(
+                x = "TPM quantile",
+                y = "H3K79me2 mark (%)",
+                linetype = "mark position"
+        ) +
+        ggplot2::facet_grid(mark_type ~ Sp, scales = "free_y") +
+        ggplot2::theme(legend.position = "top")
+```
+
+```{r warning=FALSE, message=FALSE}
+# boxplot style
+all_k79.filt.tss <-
+        Ec_k79.tss.f |> dplyr::mutate(Sp = "EctSp7") |>
+        rbind(Spro_k79.tss.f |> dplyr::mutate(Sp = "ScyPro")) |>
+        rbind(Und_k79.tss.f |> dplyr::mutate(Sp = "UndPin")) |>
+        rbind(Dher_k79.tss.f |> dplyr::mutate(Sp = "DesHer")) |>
+        dplyr::select(gene_id, 
+                      log2_TPM_plus_1 = log2_TPM_plus_1.Female,
+                      peak_K79 = peak_K79.Female, 
+                      Sp, TSS_mark) |>
+        rbind(Ddud_k79.tss |> dplyr::mutate(Sp = "DesDud") |> dplyr::select(1,3,4,6,7)) |>
+        rbind(Si_k79.tss |> dplyr::mutate(Sp = "SchIsc") |> dplyr::select(1,3,4,6,7)) |>
+        tidyr::drop_na()
+```
+
+```{r warning=FALSE, message=FALSE, fig.width=6.5, fig.height=4}
+all_k79.filt.tss |>
+        dplyr::mutate(Sp = factor(Sp, levels = c(
+                "EctSp7", "ScyPro", "UndPin", "DesHer", "DesDud", "SchIsc"
+        ))) |>
+        dplyr::mutate(peak_K79 = case_when(
+                peak_K79 == TRUE ~ "yes",
+                .default = "no"
+        )) |>
+        dplyr::mutate(TSS_mark = case_when(
+                TSS_mark == TRUE ~ "yes",
+                .default = "no"
+        )) |>
+        dplyr::rename(gene = peak_K79, TSS_only = TSS_mark) |>
+        tidyr::pivot_longer(!c(gene_id,log2_TPM_plus_1,Sp), names_to = "mark_type", values_to = "mark") |>
+        dplyr::mutate(mark = factor(mark, levels = c("yes", "no"))) |>
+        ggplot2::ggplot(aes(x = mark, y = log2_TPM_plus_1, colour = mark)) |>
+        plot_style2() +
+        ggplot2::theme_classic() +
+        ggplot2::labs(
+                x = "H3K79me2 mark",
+                y = "mean log2(TPM+1)"
+        ) +
+        ggplot2::facet_grid(mark_type ~ Sp) +
+        ggplot2::theme(legend.position = "")
+
+all_k79.filt.tss |>
+        dplyr::mutate(Sp = factor(Sp, levels = c(
+                "EctSp7", "ScyPro", "UndPin", "DesHer", "DesDud", "SchIsc"
+        ))) |>
+        dplyr::mutate(peak_K79 = case_when(
+                peak_K79 == TRUE ~ "yes",
+                .default = "no"
+        )) |>
+        dplyr::mutate(TSS_mark = case_when(
+                TSS_mark == TRUE ~ "yes",
+                .default = "no"
+        )) |>
+        dplyr::rename(gene = peak_K79, TSS_only = TSS_mark) |>
+        tidyr::pivot_longer(!c(gene_id,log2_TPM_plus_1,Sp), names_to = "mark_type", values_to = "mark") |>
+        dplyr::mutate(mark = factor(mark, levels = c("yes", "no"))) |>
+        ggplot2::ggplot(aes(x = mark, y = log2_TPM_plus_1, colour = mark)) |>
+        plot_style2() +
+        ggplot2::theme_classic() +
+        ggplot2::labs(
+                x = "H3K79me2 mark",
+                y = "mean log2(TPM+1)"
+        ) +
+        ggplot2::facet_grid(mark_type ~ Sp) +
+        ggplot2::theme(legend.position = "") +
+        ggpubr::stat_kruskal_test(label = "p.adj", size = 2.5) +
+        EnvStats::stat_n_text(size = 2.5) +
+        ggplot2::labs(title = "Female or hermaphrodite expression and H3K79me2 mark position")
+```
+
+```{r warning=FALSE, message=FALSE}
+# boxplot style
+all_k79.filt.tss.m <-
+        Ec_k79.tss.m |> dplyr::mutate(Sp = "EctSp7") |>
+        rbind(Spro_k79.tss.m |> dplyr::mutate(Sp = "ScyPro")) |>
+        rbind(Und_k79.tss.m |> dplyr::mutate(Sp = "UndPin")) |>
+        rbind(Dher_k79.tss.m |> dplyr::mutate(Sp = "DesHer")) |>
+        dplyr::select(gene_id, 
+                      log2_TPM_plus_1 = log2_TPM_plus_1.Male,
+                      peak_K79 = peak_K79.Male, 
+                      Sp, TSS_mark) |>
+        rbind(Ddud_k79.tss |> dplyr::mutate(Sp = "DesDud") |> dplyr::select(1,3,4,6,7)) |>
+        rbind(Si_k79.tss |> dplyr::mutate(Sp = "SchIsc") |> dplyr::select(1,3,4,6,7)) |>
+        tidyr::drop_na()
+```
+
+```{r warning=FALSE, message=FALSE, fig.width=6.5, fig.height=4}
+all_k79.filt.tss.m |>
+        dplyr::mutate(Sp = factor(Sp, levels = c(
+                "EctSp7", "ScyPro", "UndPin", "DesHer", "DesDud", "SchIsc"
+        ))) |>
+        dplyr::mutate(peak_K79 = case_when(
+                peak_K79 == TRUE ~ "yes",
+                .default = "no"
+        )) |>
+        dplyr::mutate(TSS_mark = case_when(
+                TSS_mark == TRUE ~ "yes",
+                .default = "no"
+        )) |>
+        dplyr::rename(gene = peak_K79, TSS_only = TSS_mark) |>
+        tidyr::pivot_longer(!c(gene_id,log2_TPM_plus_1,Sp), names_to = "mark_type", values_to = "mark") |>
+        dplyr::mutate(mark = factor(mark, levels = c("yes", "no"))) |>
+        ggplot2::ggplot(aes(x = mark, y = log2_TPM_plus_1, colour = mark)) |>
+        plot_style2() +
+        ggplot2::theme_classic() +
+        ggplot2::labs(
+                x = "H3K79me2 mark",
+                y = "mean log2(TPM+1)"
+        ) +
+        ggplot2::facet_grid(mark_type ~ Sp) +
+        ggplot2::theme(legend.position = "") +
+        ggpubr::stat_kruskal_test(label = "p.adj", size = 2.5) +
+        EnvStats::stat_n_text(size = 2.5) +
+        ggplot2::labs(title = "Male or hermaphrodite expression and H3K79me2 mark position")
+```
+
+```{r warning=FALSE, message=FALSE, fig.width=5, fig.height=4}
+all_k79.filt.tss.m |>
+        dplyr::mutate(Sp = factor(Sp, levels = c(
+                "EctSp7", "ScyPro", "UndPin", "DesHer", "DesDud", "SchIsc"
+        ))) |>
+        dplyr::filter(Sp %in% c("EctSp7", "ScyPro", "UndPin", "DesHer")) |>
+        dplyr::mutate(peak_K79 = case_when(
+                peak_K79 == TRUE ~ "yes",
+                .default = "no"
+        )) |>
+        dplyr::mutate(TSS_mark = case_when(
+                TSS_mark == TRUE ~ "yes",
+                .default = "no"
+        )) |>
+        dplyr::rename(gene = peak_K79, TSS_only = TSS_mark) |>
+        tidyr::pivot_longer(!c(gene_id,log2_TPM_plus_1,Sp), names_to = "mark_type", values_to = "mark") |>
+        dplyr::mutate(mark = factor(mark, levels = c("yes", "no"))) |>
+        ggplot2::ggplot(aes(x = mark, y = log2_TPM_plus_1, colour = mark)) |>
+        plot_style2() +
+        ggplot2::theme_classic() +
+        ggplot2::labs(
+                x = "H3K79me2 mark",
+                y = "mean log2(TPM+1)"
+        ) +
+        ggplot2::facet_grid(mark_type ~ Sp) +
+        ggplot2::theme(legend.position = "") +
+        ggpubr::stat_kruskal_test(label = "p.adj", size = 2.5) +
+        EnvStats::stat_n_text(size = 2.5) +
+        ggplot2::labs(title = "Male expression and H3K79me2 mark position")
+```
+
+```{r}
+devtools::session_info()
+```

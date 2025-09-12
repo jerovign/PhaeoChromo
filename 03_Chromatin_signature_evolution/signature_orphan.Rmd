@@ -1,0 +1,454 @@
+---
+title: "hPTM signatures association with orphan genes"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+Here, I load the supplementary table from Jeromine's hPTM signatures and examine the association between the signatures and orphan genes.
+
+```{r warning=FALSE, message=FALSE}
+library(tidyverse)
+library(ggrastr)
+library(readxl)
+```
+
+```{r warning=FALSE, message=FALSE}
+readxl::excel_sheets("data/dataset_S3_master_tables.xlsx")
+Ec_ps <- readxl::read_xlsx("data/dataset_S3_master_tables.xlsx", sheet = "Ectocarpus") |>
+        dplyr::select(gene_id, dplyr::contains("TPM"), dplyr::contains("Signature"), rank)
+Ddud_ps <- readxl::read_xlsx("data/dataset_S3_master_tables.xlsx", sheet = "Desmarestia-dudresnayi") |>
+        dplyr::select(gene_id, dplyr::contains("TPM"), dplyr::contains("Signature"), rank)
+Dher_ps <- readxl::read_xlsx("data/dataset_S3_master_tables.xlsx", sheet = "Desmarestia-herbacea") |>
+        dplyr::select(gene_id, dplyr::contains("TPM"), dplyr::contains("Signature"), rank)
+Und_ps <- readxl::read_xlsx("data/dataset_S3_master_tables.xlsx", sheet = "Undaria") |>
+        dplyr::select(gene_id, dplyr::contains("TPM"), dplyr::contains("Signature"), rank)
+Spro_ps <- readxl::read_xlsx("data/dataset_S3_master_tables.xlsx", sheet = "Scitosyphon") |>
+        dplyr::select(gene_id, dplyr::contains("TPM"), dplyr::contains("Signature"), rank)
+Si_ps <- readxl::read_xlsx("data/dataset_S3_master_tables.xlsx", sheet = "Schizocladia") |>
+        dplyr::select(gene_id, dplyr::contains("TPM"), dplyr::contains("Signature"), rank)
+```
+
+Note: Scytosiphon was misspelt in the table
+
+```{r}
+preprocess_ps_sig_orphan <- function(Species_ps){
+        Species_ps.filt <- Species_ps |> 
+                tidyr::drop_na() |>
+                dplyr::mutate(rank = as.numeric(rank)) |>
+                tidyr::drop_na(rank)
+        max_ps <- max(Species_ps.filt$rank)
+        if(any(colnames(Species_ps.filt) %in% c("Signature.Female", "Signature.Male"))){
+                Species_ps.filt2 <- 
+                        Species_ps.filt |>
+                        dplyr::mutate(Signature.Female = factor(
+                                Signature.Female, levels = paste0('S',1:16))) |>
+                        dplyr::mutate(Signature.Male = factor(
+                                Signature.Male, levels = paste0('S',1:16))) |>
+                dplyr::mutate(n_all.Female = dplyr::n(), .by = Signature.Female) |>
+                dplyr::mutate(n_all.Male = dplyr::n(), .by = Signature.Male)
+        }else{
+                Species_ps.filt2 <- 
+                        Species_ps.filt |>
+                        dplyr::mutate(Signature = factor(
+                                Signature, levels = paste0('S',1:16))) |>
+                dplyr::mutate(n_all = dplyr::n(), .by = Signature)
+        }
+        Species_ps.filt3 <- Species_ps.filt2 |>
+                dplyr::mutate(orphan = dplyr::case_when(
+                        rank == max_ps ~ "orphan",
+                        .default = "nonorphan"
+                ))
+                # dplyr::filter(rank == max_ps)
+        return(Species_ps.filt3)
+}
+
+color_table <-
+        tibble::tibble(
+                Signature = paste0('S',1:16),
+                Colour = c("#a31d21", "#e43a30", "#f36f57", "#f8a68d", "#fddfd1", "#1b733b",
+            "#2daf66", "#6ec283", "#aed9b1", "#9392c8", "#bfbfdf", "#e9eef8",
+            "#2a74bb", "#61abd7", "#afd1e5", "#999999")
+        )
+
+plot_style <- function(p_in){
+        p_out <-
+                p_in +
+                ggrastr::rasterise(ggplot2::geom_jitter(width = 0.3, alpha = 0.1)) +
+                ggplot2::geom_boxplot(width = 0.5, size = 0.8, outliers = FALSE, colour = "black") +
+                ggplot2::theme_classic() +
+                ggplot2::scale_colour_manual(values = rev(color_table$Colour)) +
+                ggplot2::theme(legend.position = "none") +
+                ggplot2::coord_flip() +
+                ggplot2::scale_x_discrete(limits=rev) +
+                ggplot2::scale_y_continuous(breaks = scales::breaks_pretty())
+        return(p_out)
+}
+
+plot_style_col <- function(p_in){
+        p_out <-
+                p_in +
+                ggplot2::geom_col(width = 0.8, colour = "black") +
+                ggplot2::theme_classic() +
+                ggplot2::scale_fill_manual(values = rev(color_table$Colour)) +
+                ggplot2::theme(legend.position = "none") +
+                ggplot2::coord_flip() +
+                # ggplot2::scale_x_discrete(limits=rev) +
+                ggplot2::scale_y_continuous(breaks = scales::breaks_pretty())
+        return(p_out)
+}
+
+sig_for_leftjoin <-
+        paste0('S',1:16) |>
+        factor(levels = paste0('S',1:16)) |>
+        tibble::as_tibble()
+```
+
+plotting signatures
+
+# hPTM signatures and number of genes
+
+Ectocarpus
+
+```{r warning=FALSE, message=FALSE, fig.width=2.5, fig.height=3}
+Ec_ps.filt_orphan.F <-
+        Ec_ps |> 
+        preprocess_ps_sig_orphan() |>
+        dplyr::mutate(n_orphan = dplyr::n(), .by = c(Signature.Female, orphan)) |>
+        dplyr::distinct(Signature.Female, n_all.Female, n_orphan, orphan) |>
+        tidyr::pivot_wider(names_from = "orphan", values_from = "n_orphan")
+
+Ec_ps.filt_orphan.M <-
+        Ec_ps |> 
+        preprocess_ps_sig_orphan() |>
+        dplyr::mutate(n_orphan = dplyr::n(), .by = c(Signature.Male, orphan)) |>
+        dplyr::distinct(Signature.Male, n_all.Male, n_orphan, orphan) |>
+        tidyr::pivot_wider(names_from = "orphan", values_from = "n_orphan")
+
+Ec_ps.filt_orphan.F.total <-
+        sum(Ec_ps.filt_orphan.F$orphan,na.rm = TRUE)/sum(Ec_ps.filt_orphan.F$n_all.Female)
+
+Ec_ps.filt_orphan.M.total <-
+        sum(Ec_ps.filt_orphan.M$orphan,na.rm = TRUE)/sum(Ec_ps.filt_orphan.M$n_all.Male)
+
+
+Ec_ps.filt_orphan.F |>
+        ggplot2::ggplot(aes(x = Signature.Female, fill = Signature.Female, y = orphan)) |>
+        plot_style_col() +
+        ggplot2::labs(x = "signature", y = "number of orphan",
+                      title = "Ectocarpus", subtitle = "female")
+
+Ec_ps.filt_orphan.M |>
+        ggplot2::ggplot(aes(x = Signature.Male, fill = Signature.Male, y = orphan)) |>
+        plot_style_col() +
+        ggplot2::labs(x = "signature", y = "number of orphan",
+                      title = "Ectocarpus", subtitle = "male")
+
+Ec_ps.filt_orphan.F |>
+        ggplot2::ggplot(aes(x = Signature.Female, fill = Signature.Female, y = 100*orphan/n_all.Female)) |>
+        plot_style_col() +
+        ggplot2::geom_hline(yintercept = 100*Ec_ps.filt_orphan.F.total, colour = "black", linetype = 3) +
+        ggplot2::labs(x = "signature", y = "% orphan within signature",
+                      title = "Ectocarpus", subtitle = "female")
+
+Ec_ps.filt_orphan.M |>
+        ggplot2::ggplot(aes(x = Signature.Male, fill = Signature.Male, y = 100*orphan/n_all.Male)) |>
+        plot_style_col() +
+        ggplot2::geom_hline(yintercept = 100*Ec_ps.filt_orphan.M.total, colour = "black", linetype = 3) +
+        ggplot2::labs(x = "signature", y = "% orphan within signature",
+                      title = "Ectocarpus", subtitle = "male")
+```
+
+
+Desmarestia-dudresnayi
+
+```{r warning=FALSE, message=FALSE, fig.width=2.5, fig.height=3}
+Ddud_ps.filt_orphan <-
+        Ddud_ps |> 
+        preprocess_ps_sig_orphan() |>
+        dplyr::mutate(n_orphan = dplyr::n(), .by = c(Signature, orphan)) |>
+        dplyr::distinct(Signature, n_all, n_orphan, orphan) |>
+        tidyr::pivot_wider(names_from = "orphan", values_from = "n_orphan")
+
+Ddud_ps.filt_orphan.total <-
+        sum(Ddud_ps.filt_orphan$orphan,na.rm = TRUE)/sum(Ddud_ps.filt_orphan$n_all)
+
+Ddud_ps.filt_orphan |>
+        ggplot2::ggplot(aes(x = Signature, fill = Signature, y = orphan)) |>
+        plot_style_col() +
+        ggplot2::labs(x = "signature", y = "number of orphan",
+                      title = "Desmarestia dudresnayi", subtitle = "hermaphrodite")
+
+Ddud_ps.filt_orphan |>
+        ggplot2::ggplot(aes(x = Signature, fill = Signature, y = 100*orphan/n_all)) |>
+        plot_style_col() +
+        ggplot2::geom_hline(yintercept = 100*Ddud_ps.filt_orphan.total, colour = "black", linetype = 3) +
+        ggplot2::labs(x = "signature", y = "% orphan within signature",
+                      title = "Desmarestia dudresnayi", subtitle = "hermaphrodite")
+```
+
+
+Desmarestia-herbacea
+
+```{r warning=FALSE, message=FALSE, fig.width=2.5, fig.height=3}
+Dher_ps.filt_orphan.F <-
+        Dher_ps |> 
+        preprocess_ps_sig_orphan() |>
+        dplyr::mutate(n_orphan = dplyr::n(), .by = c(Signature.Female, orphan)) |>
+        dplyr::distinct(Signature.Female, n_all.Female, n_orphan, orphan) |>
+        tidyr::pivot_wider(names_from = "orphan", values_from = "n_orphan")
+
+Dher_ps.filt_orphan.M <-
+        Dher_ps |> 
+        preprocess_ps_sig_orphan() |>
+        dplyr::mutate(n_orphan = dplyr::n(), .by = c(Signature.Male, orphan)) |>
+        dplyr::distinct(Signature.Male, n_all.Male, n_orphan, orphan) |>
+        tidyr::pivot_wider(names_from = "orphan", values_from = "n_orphan")
+
+Dher_ps.filt_orphan.F.total <-
+        sum(Dher_ps.filt_orphan.F$orphan,na.rm = TRUE)/sum(Dher_ps.filt_orphan.F$n_all.Female)
+
+Dher_ps.filt_orphan.M.total <-
+        sum(Dher_ps.filt_orphan.M$orphan,na.rm = TRUE)/sum(Dher_ps.filt_orphan.M$n_all.Male)
+
+
+Dher_ps.filt_orphan.F |>
+        ggplot2::ggplot(aes(x = Signature.Female, fill = Signature.Female, y = orphan)) |>
+        plot_style_col() +
+        ggplot2::labs(x = "signature", y = "number of orphan",
+                      title = "Desmarestia herbacea", subtitle = "female")
+
+Dher_ps.filt_orphan.M |>
+        ggplot2::ggplot(aes(x = Signature.Male, fill = Signature.Male, y = orphan)) |>
+        plot_style_col() +
+        ggplot2::labs(x = "signature", y = "number of orphan",
+                      title = "Desmarestia herbacea", subtitle = "male")
+
+Dher_ps.filt_orphan.F |>
+        ggplot2::ggplot(aes(x = Signature.Female, fill = Signature.Female, y = 100*orphan/n_all.Female)) |>
+        plot_style_col() +
+        ggplot2::geom_hline(yintercept = 100*Dher_ps.filt_orphan.F.total, colour = "black", linetype = 3) +
+        ggplot2::labs(x = "signature", y = "% orphan within signature",
+                      title = "Desmarestia herbacea", subtitle = "female")
+
+Dher_ps.filt_orphan.M |>
+        ggplot2::ggplot(aes(x = Signature.Male, fill = Signature.Male, y = 100*orphan/n_all.Male)) |>
+        plot_style_col() +
+        ggplot2::geom_hline(yintercept = 100*Dher_ps.filt_orphan.M.total, colour = "black", linetype = 3) +
+        ggplot2::labs(x = "signature", y = "% orphan within signature",
+                      title = "Desmarestia herbacea", subtitle = "male")
+```
+
+
+Undaria
+
+```{r warning=FALSE, message=FALSE, fig.width=2.5, fig.height=3}
+Und_ps.filt_orphan.F <-
+        Und_ps |> 
+        preprocess_ps_sig_orphan() |>
+        dplyr::mutate(n_orphan = dplyr::n(), .by = c(Signature.Female, orphan)) |>
+        dplyr::distinct(Signature.Female, n_all.Female, n_orphan, orphan) |>
+        tidyr::pivot_wider(names_from = "orphan", values_from = "n_orphan")
+
+Und_ps.filt_orphan.M <-
+        Und_ps |> 
+        preprocess_ps_sig_orphan() |>
+        dplyr::mutate(n_orphan = dplyr::n(), .by = c(Signature.Male, orphan)) |>
+        dplyr::distinct(Signature.Male, n_all.Male, n_orphan, orphan) |>
+        tidyr::pivot_wider(names_from = "orphan", values_from = "n_orphan")
+
+Und_ps.filt_orphan.F.total <-
+        sum(Und_ps.filt_orphan.F$orphan,na.rm = TRUE)/sum(Und_ps.filt_orphan.F$n_all.Female)
+
+Und_ps.filt_orphan.M.total <-
+        sum(Und_ps.filt_orphan.M$orphan,na.rm = TRUE)/sum(Und_ps.filt_orphan.M$n_all.Male)
+
+
+Und_ps.filt_orphan.F |>
+        ggplot2::ggplot(aes(x = Signature.Female, fill = Signature.Female, y = orphan)) |>
+        plot_style_col() +
+        ggplot2::labs(x = "signature", y = "number of orphan",
+                      title = "Undaria", subtitle = "female")
+
+Und_ps.filt_orphan.M |>
+        ggplot2::ggplot(aes(x = Signature.Male, fill = Signature.Male, y = orphan)) |>
+        plot_style_col() +
+        ggplot2::labs(x = "signature", y = "number of orphan",
+                      title = "Undaria", subtitle = "male")
+
+Und_ps.filt_orphan.F |>
+        ggplot2::ggplot(aes(x = Signature.Female, fill = Signature.Female, y = 100*orphan/n_all.Female)) |>
+        plot_style_col() +
+        ggplot2::geom_hline(yintercept = 100*Und_ps.filt_orphan.F.total, colour = "black", linetype = 3) +
+        ggplot2::labs(x = "signature", y = "% orphan within signature",
+                      title = "Undaria", subtitle = "female")
+
+Und_ps.filt_orphan.M |>
+        ggplot2::ggplot(aes(x = Signature.Male, fill = Signature.Male, y = 100*orphan/n_all.Male)) |>
+        plot_style_col() +
+        ggplot2::geom_hline(yintercept = 100*Und_ps.filt_orphan.M.total, colour = "black", linetype = 3) +
+        ggplot2::labs(x = "signature", y = "% orphan within signature",
+                      title = "Undaria", subtitle = "male")
+```
+
+Males removed since not all signatures are present (contains orphans).
+
+Scytosiphon
+
+```{r warning=FALSE, message=FALSE, fig.width=2.5, fig.height=3}
+Spro_ps.filt_orphan.F <-
+        Spro_ps |> 
+        preprocess_ps_sig_orphan() |>
+        dplyr::mutate(n_orphan = dplyr::n(), .by = c(Signature.Female, orphan)) |>
+        dplyr::distinct(Signature.Female, n_all.Female, n_orphan, orphan) |>
+        tidyr::pivot_wider(names_from = "orphan", values_from = "n_orphan")
+
+Spro_ps.filt_orphan.M <-
+        Spro_ps |> 
+        preprocess_ps_sig_orphan() |>
+        dplyr::mutate(n_orphan = dplyr::n(), .by = c(Signature.Male, orphan)) |>
+        dplyr::distinct(Signature.Male, n_all.Male, n_orphan, orphan) |>
+        tidyr::pivot_wider(names_from = "orphan", values_from = "n_orphan")
+
+Spro_ps.filt_orphan.F.total <-
+        sum(Spro_ps.filt_orphan.F$orphan)/sum(Spro_ps.filt_orphan.F$n_all.Female)
+
+Spro_ps.filt_orphan.M.total <-
+        sum(Spro_ps.filt_orphan.M$orphan)/sum(Spro_ps.filt_orphan.M$n_all.Male)
+
+
+Spro_ps.filt_orphan.F |>
+        ggplot2::ggplot(aes(x = Signature.Female, fill = Signature.Female, y = orphan)) |>
+        plot_style_col() +
+        ggplot2::labs(x = "signature", y = "number of orphan",
+                      title = "Scytosiphon", subtitle = "female")
+
+Spro_ps.filt_orphan.M |>
+        ggplot2::ggplot(aes(x = Signature.Male, fill = Signature.Male, y = orphan)) |>
+        plot_style_col() +
+        ggplot2::labs(x = "signature", y = "number of orphan",
+                      title = "Scytosiphon", subtitle = "male")
+
+Spro_ps.filt_orphan.F |>
+        ggplot2::ggplot(aes(x = Signature.Female, fill = Signature.Female, y = 100*orphan/n_all.Female)) |>
+        plot_style_col() +
+        ggplot2::geom_hline(yintercept = 100*Spro_ps.filt_orphan.F.total, colour = "black", linetype = 3) +
+        ggplot2::labs(x = "signature", y = "% orphan within signature",
+                      title = "Scytosiphon", subtitle = "female")
+
+Spro_ps.filt_orphan.M |>
+        ggplot2::ggplot(aes(x = Signature.Male, fill = Signature.Male, y = 100*orphan/n_all.Male)) |>
+        plot_style_col() +
+        ggplot2::geom_hline(yintercept = 100*Spro_ps.filt_orphan.M.total, colour = "black", linetype = 3) +
+        ggplot2::labs(x = "signature", y = "% orphan within signature",
+                      title = "Scytosiphon", subtitle = "male")
+```
+
+
+Schizocladia
+
+```{r warning=FALSE, message=FALSE, fig.width=2.5, fig.height=3}
+Si_ps.filt_orphan <-
+        Si_ps |> 
+        preprocess_ps_sig_orphan() |>
+        dplyr::mutate(n_orphan = dplyr::n(), .by = c(Signature, orphan)) |>
+        dplyr::distinct(Signature, n_all, n_orphan, orphan) |>
+        tidyr::pivot_wider(names_from = "orphan", values_from = "n_orphan")
+
+Si_ps.filt_orphan.total <-
+        sum(Si_ps.filt_orphan$orphan)/sum(Si_ps.filt_orphan$n_all)
+
+Si_ps.filt_orphan |>
+        ggplot2::ggplot(aes(x = Signature, fill = Signature, y = orphan)) |>
+        plot_style_col() +
+        ggplot2::labs(x = "signature", y = "number of orphan",
+                      title = "Schizocladia", subtitle = "unknown")
+
+Si_ps.filt_orphan |>
+        ggplot2::ggplot(aes(x = Signature, fill = Signature, y = 100*orphan/n_all)) |>
+        plot_style_col() +
+        ggplot2::geom_hline(yintercept = 100*Si_ps.filt_orphan.total, colour = "black", linetype = 3) +
+        ggplot2::labs(x = "signature", y = "% orphan within signature",
+                      title = "Schizocladia", subtitle = "unknown")
+```
+
+Is it possible to combine plots?
+
+```{r warning=FALSE, message=FALSE}
+all_ps.filt_orphan.total <-
+        tibble::tibble(
+                sp = c("Ec", "Spro", "Und", "Ddud", "Dher", "Si"),
+                p_total = c(
+                        Ec_ps.filt_orphan.F.total,
+                        Spro_ps.filt_orphan.F.total,
+                        Und_ps.filt_orphan.F.total,
+                        Ddud_ps.filt_orphan.total,
+                        Dher_ps.filt_orphan.F.total,
+                        Si_ps.filt_orphan.total
+                )
+        )
+all_ps.filt_orphan <-
+        Ec_ps.filt_orphan.F |> 
+        dplyr::mutate(sp = "Ec") |> 
+        dplyr::rename(Signature = Signature.Female, 
+                      n_all = n_all.Female) |>
+        rbind(
+                Und_ps.filt_orphan.F |> dplyr::mutate(sp = "Und") |> 
+                        dplyr::rename(Signature = Signature.Female, 
+                                      n_all = n_all.Female)
+        ) |>
+        rbind(
+                Ddud_ps.filt_orphan |> dplyr::mutate(sp = "Ddud")
+        ) |>
+        rbind(
+                Dher_ps.filt_orphan.F |> dplyr::mutate(sp = "Dher") |> 
+                        dplyr::rename(Signature = Signature.Female, 
+                                      n_all = n_all.Female)
+        ) |>
+        rbind(
+                Spro_ps.filt_orphan.F |> dplyr::mutate(sp = "Spro") |> 
+                        dplyr::rename(Signature = Signature.Female, 
+                                      n_all = n_all.Female)
+        ) |>
+        rbind(
+                Si_ps.filt_orphan |> dplyr::mutate(sp = "Si")
+        ) |> 
+        dplyr::left_join(all_ps.filt_orphan.total) |>
+        dplyr::mutate(orphan = dplyr::case_when(
+                is.na(orphan) ~ 0,
+                .default = orphan
+        )) |>
+        dplyr::mutate(p_orphan = orphan/n_all,
+                      p_diff = p_orphan - p_total)
+```
+
+```{r warning=FALSE, message=FALSE, fig.width=3, fig.height=2.5}
+cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+
+all_ps.filt_orphan |>
+        ggplot2::ggplot(aes(x = Signature, colour = sp, group = sp, y = 100*p_orphan)) +
+        ggplot2::geom_line(size = 1, alpha = 0.8) +
+        ggplot2::labs(x = "signature", y = "% orphan within signature") +
+        ggplot2::theme_classic() +
+        ggplot2::coord_flip() +
+        ggplot2::scale_x_discrete(limits=rev) +
+        ggplot2::scale_y_continuous(breaks = scales::breaks_pretty()) +
+        ggplot2::scale_colour_manual(values=cbPalette)
+
+all_ps.filt_orphan |>
+        ggplot2::ggplot(aes(x = Signature, colour = sp, group = sp, y = 100*p_diff)) +
+        ggplot2::geom_line(size = 1, alpha = 0.8) +
+        ggplot2::labs(x = "signature", y = "% orphan within - across signature") +
+        ggplot2::theme_classic() +
+        ggplot2::coord_flip() +
+        ggplot2::scale_x_discrete(limits=rev) +
+        ggplot2::scale_y_continuous(breaks = scales::breaks_pretty()) +
+        ggplot2::scale_colour_manual(values=cbPalette)
+```
+
+# session info
+
+```{r}
+devtools::session_info()
+```

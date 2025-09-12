@@ -1,0 +1,639 @@
+---
+title: "Signature simulation"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+Since there were a few challenges to making a synteny plot for the conserved genes, we wanted to perform permutations to show that the number of orthologues with the same signature is actually significant = conserved (at least in regulatory functions).
+
+```{r warning=FALSE, message=FALSE}
+library(tidyverse)
+library(tidymodels)
+library(readxl)
+```
+
+Read and make tx2gene file to replace gene IDs for some species.
+
+```{r warning=FALSE, message=FALSE}
+Und_tx2gene <- readr::read_tsv("data/TPM/Und_tx2gene.tsv",col_select = c(1,2), col_names = c("tx", "gene_id"))
+Si_tx2gene <- readr::read_tsv("data/TPM/Schizocladia-ischiensis.tsv",col_select = c(1,2))
+```
+
+Read signature master file
+
+```{r warning=FALSE, message=FALSE}
+readxl::excel_sheets("data/dataset_S3_master_tables.xlsx")
+
+Ec_sig <- readxl::read_xlsx("data/dataset_S3_master_tables.xlsx", sheet = "Ectocarpus") |>
+        dplyr::select(gene_id, dplyr::contains("Signature"))
+Ddud_sig <- readxl::read_xlsx("data/dataset_S3_master_tables.xlsx", sheet = "Desmarestia-dudresnayi") |>
+        dplyr::select(gene_id, dplyr::contains("Signature"))
+Dher_sig <- readxl::read_xlsx("data/dataset_S3_master_tables.xlsx", sheet = "Desmarestia-herbacea") |>
+        dplyr::select(gene_id, dplyr::contains("Signature"))
+Spro_sig <- readxl::read_xlsx("data/dataset_S3_master_tables.xlsx", sheet = "Scitosyphon") |>
+        dplyr::select(gene_id, dplyr::contains("Signature"))
+
+# species where renaming is needed
+
+Und_sig <- readxl::read_xlsx("data/dataset_S3_master_tables.xlsx", sheet = "Undaria") |>
+        # rename gene_id
+        dplyr::left_join(Und_tx2gene) |> dplyr::select(-gene_id) |>
+        dplyr::select(gene_id = tx, dplyr::contains("Signature"))
+Si_sig <- readxl::read_xlsx("data/dataset_S3_master_tables.xlsx", sheet = "Schizocladia") |>
+        # rename gene_id
+        dplyr::left_join(Si_tx2gene) |> dplyr::select(-gene_id) |>
+        dplyr::select(gene_id = tx, dplyr::contains("Signature"))
+```
+
+Read and process orthogroup data to obtain one-to-one orthologues
+
+Get a single isoform per gene (post-hoc).
+
+
+```{r warning=FALSE, message=FALSE}
+# filter longest isoform in Ectocarpus
+library(rtracklayer)
+
+Ec_data.gtf <- rtracklayer::import("data/annotation/Ec32_V5.longest_mRNA.SDR_F.AGAT.mod.gtf")
+Ec_data.gtf.df <- Ec_data.gtf |>
+        rtracklayer::as.data.frame() |>
+        dplyr::select(seqnames, gene_id) |>
+        dplyr::distinct()
+```
+
+```{r warning=FALSE, message=FALSE}
+og_data <-
+        readr::read_tsv("data/Orthogroups.tsv") |>
+        tidyr::drop_na() |>
+        tidyr::pivot_longer(
+                cols = -Orthogroup,
+                names_to = "species",
+                values_to = "gene_id"
+                ) |>
+        dplyr::filter(!is.na(gene_id)) |>
+        tidyr::separate_rows(gene_id, sep = ",\\s*") |>
+        dplyr::filter(gene_id != "") |>
+        # filter isoforms
+        dplyr::filter(!stringr::str_detect(gene_id, "\\.t[0-9]+$") | stringr::str_detect(gene_id, "\\.t1$")) |>
+        dplyr::filter(
+                (species == "PUBLIC_Ectocarpus-sp7_proteins" & gene_id %in% Ec_data.gtf.df$gene_id) |
+                        (species != "PUBLIC_Ectocarpus-sp7_proteins")
+        )
+
+# get single copy data
+og_sc.pre <- 
+        og_data |>
+        dplyr::summarise(n = dplyr::n(), .by = c(Orthogroup, species)) |>
+        dplyr::filter(sum(n) == 6, .by = c(Orthogroup)) |>
+        dplyr::distinct(Orthogroup)
+og_sc <-
+        og_data |>
+        dplyr::filter(Orthogroup %in% og_sc.pre$Orthogroup)
+og_sc.edit <-
+        og_sc |>
+        dplyr::mutate(
+                gene_id = stringr::str_remove(gene_id, "\\.t1$"),
+                gene_id = stringr::str_replace(gene_id, "prot_", "mRNA_"),
+                species = dplyr::case_when(
+                        stringr::str_detect(species,"dudresnayi") ~ "Ddud",
+                        stringr::str_detect(species,"herbacea") ~ "Dher",
+                        stringr::str_detect(species,"Ectocarpus") ~ "Ec",
+                        stringr::str_detect(species,"Undaria") ~ "Und",
+                        stringr::str_detect(species,"Scytosiphon") ~ "Spro",
+                        stringr::str_detect(species,"Schizocladia") ~ "Si"
+                ))
+```
+
+Combine orthologue and signature data
+
+```{r warning=FALSE, message=FALSE}
+sig.all <- 
+        Ec_sig |> dplyr::select(1,Signature = Signature.Female) |>
+        rbind(Ddud_sig) |>
+        rbind(Dher_sig |> dplyr::select(1,Signature = Signature.Female)) |>
+        rbind(Spro_sig |> dplyr::select(1,Signature = Signature.Female)) |>
+        rbind(Und_sig |> dplyr::select(1,Signature = Signature.Female)) |>
+        rbind(Si_sig)
+
+sig.all[sig.all == "NA"] <- NA  # replace "NA" with NA
+
+og_sc_sig <- 
+        og_sc.edit |>
+        dplyr::left_join(sig.all) |>
+        dplyr::distinct(Orthogroup, species, .keep_all = TRUE) |>  # keep first match only
+        tidyr::pivot_wider(!gene_id, names_from = species, values_from = Signature) |>
+        tidyr::drop_na()
+```
+
+Obtain empirical values for the conservation of orthologue signatures
+
+```{r warning=FALSE, message=FALSE}
+og_sc_sig.6 <- og_sc_sig |> 
+        dplyr::mutate(all_same = n_distinct(c_across(Ddud:Spro)) == 1,
+                      .by = Orthogroup)
+
+og_sc_sig.6_2 <- og_sc_sig |> 
+        dplyr::mutate(all_same = n_distinct(c_across(Ddud:Spro)) == 2,
+                      .by = Orthogroup)
+
+og_sc_sig.5 <- og_sc_sig |> 
+        dplyr::mutate(all_same = n_distinct(c(Ddud, Dher, Ec, Und, Spro)) == 1,
+                      .by = Orthogroup)
+
+# exact conservation
+table(og_sc_sig.6$all_same)
+
+# exact conservation excluding schizocladia
+table(og_sc_sig.5$all_same)
+
+# at least 5 out of 6 species are conserved
+table(og_sc_sig.6_2$all_same)
+```
+
+`294` (out of 3770) orthologues share signatures out of 6 species.
+If we allow at least one species to differ then, we get `1257` conserved.
+`612` orthologues share signatures out of 5 species, after excluding the outgroup Schizocladia.
+
+Now the question is how this differs from the null hypothesis of *no conservation*.
+We can permute the signatures of the orthologues and see how many orthologues have the same signature in each permutation.
+
+If we permute only Spro data to compare conservation - so only two species.
+
+```{r warning=FALSE, message=FALSE}
+og_sc_sig.rand.2 <- 
+        og_sc_sig |>
+        # rsample::permutations(permute = Ddud:Spro,
+        #                       times = 100) |>
+        rsample::permutations(permute = Spro,
+                              times = 100,
+                              apparent = TRUE)
+
+# og_sc_sig.rand$splits[[1]] %>% analysis()
+
+
+count_same_fast_Spro <- function(df) {
+  same <- apply(df |> dplyr::select(Ec, Spro), 1, function(x) length(unique(x)) == 1)
+  sum(same)
+}
+
+og_sc_sig.rand.res.2 <- og_sc_sig.rand.2 |>
+        dplyr::mutate(n_same = map_int(splits, ~ count_same_fast_Spro(analysis(.x)))) |>
+        dplyr::select(id, n_same) |> 
+        dplyr::mutate(data = dplyr::case_when(
+                id == "Apparent" ~ "empirical",
+                .default = "permutation"
+        )) 
+```
+
+```{r warning=FALSE, message=FALSE, fig.width=4, fig.height=2.5}
+og_sc_sig.rand.res.2 |> 
+        ggplot2::ggplot(aes(n_same, fill = data)) +
+        ggplot2::geom_histogram(colour = "black") +
+        ggplot2::theme_classic() +
+        ggplot2::labs(
+                x = "orthologue w/ conserved signature",
+                title = "Ec vs Spro"
+        )
+```
+
+and for the furthest part of the tree Ectocarpus (Ec) vs Schizocladia (Si)
+
+```{r warning=FALSE, message=FALSE}
+og_sc_sig.rand.2Si <- 
+        og_sc_sig |>
+        # rsample::permutations(permute = Ddud:Spro,
+        #                       times = 100) |>
+        rsample::permutations(permute = Si,
+                              times = 100,
+                              apparent = TRUE)
+
+# og_sc_sig.rand$splits[[1]] %>% analysis()
+
+
+count_same_fast_Si <- function(df) {
+  same <- apply(df |> dplyr::select(Ec, Si), 1, function(x) length(unique(x)) == 1)
+  sum(same)
+}
+
+og_sc_sig.rand.res.2Si <- og_sc_sig.rand.2Si |>
+        dplyr::mutate(n_same = map_int(splits, ~ count_same_fast_Si(analysis(.x)))) |>
+        dplyr::select(id, n_same) |> 
+        dplyr::mutate(data = dplyr::case_when(
+                id == "Apparent" ~ "empirical",
+                .default = "permutation"
+        )) 
+```
+
+```{r warning=FALSE, message=FALSE, fig.width=4, fig.height=2.5}
+og_sc_sig.rand.res.2Si |> 
+        ggplot2::ggplot(aes(n_same, fill = data)) +
+        ggplot2::geom_histogram(colour = "black") +
+        ggplot2::theme_classic() +
+        ggplot2::labs(
+                x = "orthologue w/ conserved signature",
+                title = "Ec vs Si"
+        )
+```
+
+and between hermaphrodite and sexual Dher and Ddud
+
+```{r warning=FALSE, message=FALSE}
+og_sc_sig.rand.2herm <- 
+        og_sc_sig |>
+        # rsample::permutations(permute = Ddud:Spro,
+        #                       times = 100) |>
+        rsample::permutations(permute = Dher,
+                              times = 100,
+                              apparent = TRUE)
+
+# og_sc_sig.rand$splits[[1]] %>% analysis()
+
+
+count_same_fast_herm <- function(df) {
+  same <- apply(df |> dplyr::select(Dher, Ddud), 1, function(x) length(unique(x)) == 1)
+  sum(same)
+}
+
+og_sc_sig.rand.res.2herm <- og_sc_sig.rand.2herm |>
+        dplyr::mutate(n_same = map_int(splits, ~ count_same_fast_herm(analysis(.x)))) |>
+        dplyr::select(id, n_same) |> 
+        dplyr::mutate(data = dplyr::case_when(
+                id == "Apparent" ~ "empirical",
+                .default = "permutation"
+        )) 
+```
+
+```{r warning=FALSE, message=FALSE, fig.width=4, fig.height=2.5}
+og_sc_sig.rand.res.2herm |> 
+        ggplot2::ggplot(aes(n_same, fill = data)) +
+        ggplot2::geom_histogram(colour = "black") +
+        ggplot2::theme_classic() +
+        ggplot2::labs(
+                x = "orthologue w/ conserved signature",
+                title = "Dher vs Ddud"
+        )
+```
+
+Check for normality in the permutations
+
+```{r warning=FALSE, message=FALSE, fig.width=4, fig.height=2.5}
+# Ec vs Spro
+og_sc_sig.rand.res.2.temp <- 
+        og_sc_sig.rand.res.2 |>
+        dplyr::filter(data == "permutation") 
+og_sc_sig.rand.res.2.temp |> 
+        ggpubr::ggqqplot(x = "n_same")
+shapiro.test(og_sc_sig.rand.res.2.temp$n_same)
+
+# Ec vs Si
+og_sc_sig.rand.res.2Si.temp <- 
+        og_sc_sig.rand.res.2Si |>
+        dplyr::filter(data == "permutation") 
+og_sc_sig.rand.res.2Si.temp |> 
+        ggpubr::ggqqplot(x = "n_same")
+shapiro.test(og_sc_sig.rand.res.2Si.temp$n_same)
+
+# Dher vs Ddud
+og_sc_sig.rand.res.2herm.temp <- 
+        og_sc_sig.rand.res.2herm |>
+        dplyr::filter(data == "permutation") 
+og_sc_sig.rand.res.2herm.temp |> 
+        ggpubr::ggqqplot(x = "n_same")
+shapiro.test(og_sc_sig.rand.res.2herm.temp$n_same)
+```
+
+```{r}
+rm(og_sc_sig.rand.res.2.temp, og_sc_sig.rand.res.2Si.temp, og_sc_sig.rand.res.2herm.temp)
+rm(og_sc_sig.rand.res.2, og_sc_sig.rand.res.2Si, og_sc_sig.rand.res.2herm)
+```
+
+There is a strong relationship between the evolutionary distance and the significance of the difference between the observed and permuted values.
+
+### Permutations across all species (pairwise against Ectocarpus)
+
+Let's do this more systematically. We want to reshuffle all species and compare the difference w.r.t. Ectocarpus.
+
+```{r warning=FALSE, message=FALSE}
+compute_perm <- function(og_sc_sig, species_select, n_perm = 1000){
+        df_rand <- 
+                og_sc_sig |>
+                rsample::permutations(permute = species_select,
+                                      times = n_perm,
+                                      apparent = TRUE)
+
+        count_same_fast_select <- function(df_rand, species_select) {
+                df_rand_select <- df_rand |> dplyr::select(Ec, !!sym(species_select))
+                same <- apply(df_rand_select, 1, function(x) length(unique(x)) == 1)
+                sum(same)
+        }
+        df_out <-
+                df_rand |>
+                dplyr::mutate(n_same = purrr::map_int(splits, ~ count_same_fast_select(analysis(.x), species_select = species_select))) |>
+                dplyr::select(id, n_same) |> 
+                dplyr::mutate(data = dplyr::case_when(
+                        id == "Apparent" ~ "empirical",
+                        .default = "permutation"
+                        ))
+        df_out <- split(df_out, df_out$data)
+        return(df_out)
+}
+
+Ec_Spro_perm <- compute_perm(og_sc_sig, species_select = "Spro")
+Ec_Und_perm <- compute_perm(og_sc_sig, species_select = "Und")
+Ec_Dher_perm <- compute_perm(og_sc_sig, species_select = "Dher")
+Ec_Ddud_perm <- compute_perm(og_sc_sig, species_select = "Ddud")
+Ec_Si_perm <- compute_perm(og_sc_sig, species_select = "Si")
+```
+
+```{r warning=FALSE, message=FALSE}
+Ec_vall_perm <-
+        Ec_Spro_perm$permutation |> dplyr::mutate(sp = "Spro") |>
+        rbind(
+                Ec_Und_perm$permutation |> dplyr::mutate(sp = "Und")
+        ) |>
+        rbind(
+                Ec_Dher_perm$permutation |> dplyr::mutate(sp = "Dher")
+        ) |>
+        rbind(
+                Ec_Ddud_perm$permutation |> dplyr::mutate(sp = "Ddud")
+        ) |>
+        rbind(
+                Ec_Si_perm$permutation |> dplyr::mutate(sp = "Si")
+        ) |>
+        dplyr::mutate(sp = factor(sp, levels = c("Spro", "Und", "Ddud", "Dher", "Si")))
+
+Ec_vall_emp <-
+        Ec_Spro_perm$empirical |> dplyr::mutate(sp = "Spro") |>
+        rbind(
+                Ec_Und_perm$empirical |> dplyr::mutate(sp = "Und")
+        ) |>
+        rbind(
+                Ec_Dher_perm$empirical |> dplyr::mutate(sp = "Dher")
+        ) |>
+        rbind(
+                Ec_Ddud_perm$empirical |> dplyr::mutate(sp = "Ddud")
+        ) |>
+        rbind(
+                Ec_Si_perm$empirical |> dplyr::mutate(sp = "Si")
+        ) |>
+        dplyr::mutate(sp = factor(sp, levels = c("Spro", "Und", "Ddud", "Dher", "Si")))
+```
+
+```{r warning=FALSE, message=FALSE, fig.width=3, fig.height=2.5}
+Ec_vall_perm |>
+        ggplot2::ggplot(aes(x = sp, y = n_same)) +
+        see::geom_violinhalf(colour = "black", fill = "lavender", width = 1.5) +
+        ggplot2::geom_point(data = Ec_vall_emp, colour = "red", shape = 8) +
+        ggplot2::theme_classic() +
+        ggplot2::scale_x_discrete(limits=rev) +
+        theme(panel.grid.major.y = element_line(colour = "grey90")) +
+        ggplot2::coord_flip() +
+        ggplot2::labs(x = "species", y = "no. orthologues w/ conserved signature")
+```
+
+
+Check for normality
+
+```{r warning=FALSE, message=FALSE, fig.width=5, fig.height=4}
+Ec_vall_perm |> 
+        ggpubr::ggqqplot(x = "n_same") +
+        ggplot2::facet_wrap(.~sp, scales = "free_y")
+
+Ec_vall_perm |>
+        dplyr::summarise(
+                shapiro = list(shapiro.test(n_same)),
+                .by = "sp"
+                ) |>
+        dplyr::mutate(
+                statistic = purrr::map_dbl(shapiro, ~ .x$statistic),
+                p_value = purrr::map_dbl(shapiro, ~ .x$p.value)
+                )
+
+```
+
+Since it is normally distributed, we can compute the p-values
+
+```{r warning=FALSE, message=FALSE}
+# computing from the permutations
+Ec_vall_perm |>
+        dplyr::inner_join(Ec_vall_emp, by = "sp", suffix = c("_perm", "_emp")) |>
+        dplyr::summarise(
+                p_value = mean(n_same_perm >= n_same_emp),
+                .by = sp
+                )
+```
+
+```{r warning=FALSE, message=FALSE}
+# since the permutations approximates the normal distrbution, let's use this as well
+# summarise mean and sd from permutations
+# this is the Z-test
+perm_stats <- 
+        Ec_vall_perm |>
+        dplyr::summarise(
+                mean_perm = mean(n_same),
+                sd_perm = sd(n_same),
+                .by = sp
+                )
+
+emp_pvals <-
+        Ec_vall_emp |>
+        dplyr::left_join(perm_stats, by = "sp") |>
+        dplyr::mutate(
+                z = (n_same - mean_perm) / sd_perm,
+                p_value = 1 - pnorm(z)  # right-tailed
+                ) |>
+        dplyr::select(sp, empirical = n_same, mean_perm, sd_perm, z, p_value)
+
+emp_pvals
+```
+
+With 1000 permutations
+
+```R
+> emp_pvals
+# A tibble: 5 × 6
+  sp    empirical mean_perm sd_perm     z   p_value
+  <fct>     <int>     <dbl>   <dbl> <dbl>     <dbl>
+1 Spro       1847     1716.    13.5  9.68 0        
+2 Und        1351     1195.    15.6 10.0  0        
+3 Dher       1588     1430.    14.9 10.6  0        
+4 Ddud       1785     1600.    15.0 12.3  0        
+5 Si         1123     1058.    15.6  4.19 0.0000141
+```
+
+Since the permutations are normally distributed, we can assume the mean and sd of the sample. With this, we can compute the p-value using the z-test. The z-test is used rather than the t-test because n is large and the central limit theorem should apply well.
+
+BUT it is not standard so I will just use the permutation p-value.
+
+### Permutations across all species (same signature for all)
+
+If I resample all
+
+```{r warning=FALSE, message=FALSE}
+n_perm = 100
+perm_list <- 1:n_perm %>%
+  purrr::map(~ og_sc_sig %>%
+        dplyr::mutate(across(c(Ddud, Dher, Ec, Und, Si, Spro), ~ sample(.))) )
+
+# create a rsample-like object to apply the count function
+og_sc_sig.rand.all <- tibble(
+  splits = perm_list,
+  id = paste0("Permutation", 1:n_perm)
+)
+```
+
+
+```{r}
+count_same_fast <- function(df) {
+  same <- apply(df |> dplyr::select(Ddud:Spro), 1, function(x) length(unique(x)) == 1)
+  sum(same)
+}
+
+og_sc_sig.rand.res.all <- og_sc_sig.rand.all |>
+        dplyr::mutate(n_same = map_int(splits, ~ count_same_fast(.x))) |>
+        dplyr::select(id, n_same) |>
+        # add empirical data
+        rbind(
+                tibble::tibble(
+                        id = "Apparent",
+                        n_same = 264
+                )
+        ) |> 
+        dplyr::mutate(data = dplyr::case_when(
+                id == "Apparent" ~ "empirical",
+                .default = "permutation"
+        )) 
+```
+
+```{r warning=FALSE, message=FALSE, fig.width=4, fig.height=2.5}
+og_sc_sig.rand.res.all |>
+        dplyr::filter(data == "permutation") |>
+        ggplot2::ggplot(aes(n_same, fill = data)) +
+        ggplot2::geom_histogram(colour = "black", fill = "lavender") +
+        ggplot2::geom_vline(xintercept = 264, colour = "red", linetype = 2) +
+        ggplot2::theme_classic() +
+        ggplot2::labs(
+                x = "orthologue w/ conserved signature",
+                title = "Resampling all species"
+        )
+```
+
+Let's try this with 1000 permutations.
+
+```{r warning=FALSE, message=FALSE}
+n_perm = 1000
+perm_list <- 1:n_perm %>%
+  purrr::map(~ og_sc_sig %>%
+        dplyr::mutate(across(c(Ddud, Dher, Ec, Und, Si, Spro), ~ sample(.))) )
+
+# create a rsample-like object to apply the count function
+og_sc_sig.rand.all.1k <- tibble(
+  splits = perm_list,
+  id = paste0("Permutation", 1:n_perm)
+)
+```
+
+
+```{r}
+count_same_fast <- function(df) {
+  same <- apply(df |> dplyr::select(Ddud:Spro), 1, function(x) length(unique(x)) == 1)
+  sum(same)
+}
+
+og_sc_sig.rand.res.all.1k <- og_sc_sig.rand.all.1k |>
+        dplyr::mutate(n_same = map_int(splits, ~ count_same_fast(.x))) |>
+        dplyr::select(id, n_same) |>
+        # add empirical data
+        rbind(
+                tibble::tibble(
+                        id = "Apparent",
+                        n_same = 264
+                )
+        ) |> 
+        dplyr::mutate(data = dplyr::case_when(
+                id == "Apparent" ~ "empirical",
+                .default = "permutation"
+        )) 
+```
+
+```{r warning=FALSE, message=FALSE, fig.width=4, fig.height=2.5}
+og_sc_sig.rand.res.all.1k |> 
+        ggplot2::ggplot(aes(n_same, fill = data)) +
+        ggplot2::geom_histogram(colour = "black") +
+        ggrepel::geom_label_repel(
+                data = tibble(x = 264, label = "empirical = 264"),
+                ggplot2::aes(x = x, y = 1,
+                             label = label),
+                stat = "unique",
+                size = 3,
+                nudge_y = 30,
+                inherit.aes = FALSE) +
+        ggplot2::theme_classic() +
+        ggplot2::labs(
+                x = "orthologue w/ conserved signature",
+                title = "Resampling all species",
+                y = "count"
+        )
+```
+
+```{r}
+og_sc_sig.rand.res.all.1k.perm <- 
+        og_sc_sig.rand.res.all.1k |>
+        dplyr::filter(data == "permutation")
+```
+
+Check for normality
+
+```{r warning=FALSE, message=FALSE, fig.width=3, fig.height=3}
+og_sc_sig.rand.res.all.1k.perm |> 
+        ggpubr::ggqqplot(x = "n_same")
+# shapiro.test(og_sc_sig.rand.res.all.1k.perm$n_same)
+```
+
+Since it is roughly normally distributed, we can compute the p-values
+
+```{r warning=FALSE, message=FALSE}
+# computing from the permutations
+og_sc_sig.rand.res.all.1k.perm |>
+        dplyr::summarise(p_value = mean(n_same >= 264))
+```
+
+```{r warning=FALSE, message=FALSE}
+# since the permutations approximates the normal distrbution, let's use this as well
+# summarise mean and sd from permutations
+# this is the Z-test
+perm_stats <- 
+        og_sc_sig.rand.res.all.1k.perm |>
+        dplyr::summarise(
+                mean_perm = mean(n_same),
+                sd_perm = sd(n_same)
+                )
+
+emp_pvals <-
+        perm_stats |>
+        dplyr::mutate(
+                z = (264 - mean_perm) / sd_perm,
+                p_value = 1 - pnorm(z)  # right-tailed
+                )
+
+emp_pvals
+```
+
+With 10000 permutations
+
+```R
+> emp_pvals
+# A tibble: 1 × 4
+  mean_perm sd_perm     z p_value
+      <dbl>   <dbl> <dbl>   <dbl>
+1      122.    9.98  14.2       0
+```
+
+For 10k permutations, both Ec_vall_perm and og_sc_sig.rand.res.all have been saved as `.rds` files in data.
+
+```{r}
+Ec_vall_perm <- readr::read_rds("data/Ec_vall_perm.rds")
+og_sc_sig.rand.res.all <- readr::read_rds("data/og_sc_perm.rds")
+```

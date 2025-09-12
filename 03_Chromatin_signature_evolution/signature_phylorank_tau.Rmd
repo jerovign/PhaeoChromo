@@ -1,0 +1,717 @@
+---
+title: "hPTM signatures association with gene age and expression dynamics"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+Here, I load the supplementary table from Jeromine's hPTM signatures and examine the association between the signatures and evolutionary (as captured by gene age) and expression dynamics (as captured by tau)
+
+```{r warning=FALSE, message=FALSE}
+library(tidyverse)
+library(ggrastr)
+library(readxl)
+library(scales)
+```
+
+We use ggrastr because it helps with plotting large number of points.
+
+```{r warning=FALSE, message=FALSE}
+readxl::excel_sheets("data/dataset_S3_master_tables.xlsx")
+Ec_ps <- readxl::read_xlsx("data/dataset_S3_master_tables.xlsx", sheet = "Ectocarpus") |>
+        dplyr::select(gene_id, dplyr::contains("TPM"), dplyr::contains("Signature"), rank)
+Ddud_ps <- readxl::read_xlsx("data/dataset_S3_master_tables.xlsx", sheet = "Desmarestia-dudresnayi") |>
+        dplyr::select(gene_id, dplyr::contains("TPM"), dplyr::contains("Signature"), rank)
+Dher_ps <- readxl::read_xlsx("data/dataset_S3_master_tables.xlsx", sheet = "Desmarestia-herbacea") |>
+        dplyr::select(gene_id, dplyr::contains("TPM"), dplyr::contains("Signature"), rank)
+Und_ps <- readxl::read_xlsx("data/dataset_S3_master_tables.xlsx", sheet = "Undaria") |>
+        dplyr::select(gene_id, dplyr::contains("TPM"), dplyr::contains("Signature"), rank)
+Spro_ps <- readxl::read_xlsx("data/dataset_S3_master_tables.xlsx", sheet = "Scitosyphon") |>
+        dplyr::select(gene_id, dplyr::contains("TPM"), dplyr::contains("Signature"), rank)
+Si_ps <- readxl::read_xlsx("data/dataset_S3_master_tables.xlsx", sheet = "Schizocladia") |>
+        dplyr::select(gene_id, dplyr::contains("TPM"), dplyr::contains("Signature"), rank)
+```
+
+Note: Scytosiphon was misspelt in the table
+
+```{r}
+preprocess_ps_sig <- function(Species_ps){
+        Species_ps.filt <- Species_ps |> 
+                tidyr::drop_na() |>
+                dplyr::mutate(rank = as.numeric(rank)) |>
+                tidyr::drop_na(rank)
+        if(any(colnames(Species_ps.filt) %in% c("Signature.Female", "Signature.Male"))){
+                Species_ps.filt2 <- 
+                        Species_ps.filt |>
+                        dplyr::mutate(Signature.Female = factor(
+                                Signature.Female, levels = paste0('S',1:16))) |>
+                        dplyr::mutate(Signature.Male = factor(
+                                Signature.Male, levels = paste0('S',1:16)))
+        }else{
+                Species_ps.filt2 <- 
+                        Species_ps.filt |>
+                        dplyr::mutate(Signature = factor(
+                                Signature, levels = paste0('S',1:16)))
+        }
+        return(Species_ps.filt2)
+}
+
+color_table <-
+        tibble::tibble(
+                Signature = paste0('S',1:16),
+                Colour = c("#a31d21", "#e43a30", "#f36f57", "#f8a68d", "#fddfd1", "#1b733b",
+            "#2daf66", "#6ec283", "#aed9b1", "#9392c8", "#bfbfdf", "#e9eef8",
+            "#2a74bb", "#61abd7", "#afd1e5", "#999999")
+        )
+
+plot_style <- function(p_in){
+        p_out <-
+                p_in +
+                ggrastr::rasterise(ggplot2::geom_jitter(width = 0.3, alpha = 0.1)) +
+                ggplot2::geom_boxplot(width = 0.5, size = 0.8, outliers = FALSE, colour = "black") +
+                ggplot2::theme_classic() +
+                ggplot2::scale_colour_manual(values = rev(color_table$Colour)) +
+                ggplot2::theme(legend.position = "none") +
+                ggplot2::coord_flip() +
+                # ggplot2::scale_x_discrete(limits=rev) +
+                ggplot2::scale_y_continuous(breaks = scales::breaks_pretty())
+        return(p_out)
+}
+```
+
+plotting signatures
+
+# hPTM signatures and mean expression or gene age.
+
+Ectocarpus
+
+```{r warning=FALSE, message=FALSE, fig.width=2.5, fig.height=3}
+Ec_ps.filt <-
+        Ec_ps |> 
+        preprocess_ps_sig()
+Ec_ps.filt |>
+        ggplot2::ggplot(aes(x = Signature.Female, colour = Signature.Female, y = rank)) |>
+        plot_style() +
+        ggplot2::labs(x = "signature", y = "phylorank",
+                      title = "Ectocarpus", subtitle = "female")
+Ec_ps.filt |>
+        ggplot2::ggplot(aes(x = Signature.Male, colour = Signature.Male, y = rank)) |>
+        plot_style() +
+        ggplot2::labs(x = "signature", y = "phylorank",
+                      title = "Ectocarpus", subtitle = "male")
+# expression
+Ec_ps.filt |>
+        ggplot2::ggplot(aes(x = Signature.Female, colour = Signature.Female, y = log2_TPM_plus_1.Female)) |>
+        plot_style() +
+        ggplot2::labs(x = "signature", y = "log(TPM+1)",
+                      title = "Ectocarpus", subtitle = "female")
+Ec_ps.filt |>
+        ggplot2::ggplot(aes(x = Signature.Male, colour = Signature.Male, y = log2_TPM_plus_1.Male)) |>
+        plot_style() +
+        ggplot2::labs(x = "signature", y = "log(TPM+1)",
+                      title = "Ectocarpus", subtitle = "male")
+```
+
+```{r}
+kruskal.test(log2_TPM_plus_1.Female ~ Signature.Female, data = Ec_ps.filt)
+kruskal.test(log2_TPM_plus_1.Male ~ Signature.Male, data = Ec_ps.filt)
+kruskal.test(rank ~ Signature.Female, data = Ec_ps.filt)
+kruskal.test(rank ~ Signature.Male, data = Ec_ps.filt)
+```
+
+In terms of information, the grouping reduces entropy w.r.t. gene age ranks.
+
+Desmarestia-dudresnayi
+
+```{r warning=FALSE, message=FALSE, fig.width=2.5, fig.height=3}
+Ddud_ps.filt <-
+        Ddud_ps |> 
+        preprocess_ps_sig()
+Ddud_ps.filt |>
+        ggplot2::ggplot(aes(x = Signature, colour = Signature, y = rank)) |>
+        plot_style() +
+        ggplot2::labs(x = "signature", y = "phylorank", 
+                      title = "Desmarestia dudresnayi", subtitle = "hermaphrodite")
+# expression
+Ddud_ps.filt |>
+        ggplot2::ggplot(aes(x = Signature, colour = Signature, y = log2_TPM_plus_1)) |>
+        plot_style() +
+        ggplot2::labs(x = "signature", y = "log(TPM+1)", 
+                      title = "Desmarestia dudresnayi", subtitle = "hermaphrodite")
+```
+
+```{r}
+kruskal.test(log2_TPM_plus_1 ~ Signature, data = Ddud_ps.filt)
+kruskal.test(rank ~ Signature, data = Ddud_ps.filt)
+```
+
+Desmarestia-herbacea
+
+```{r warning=FALSE, message=FALSE, fig.width=2.5, fig.height=3}
+Dher_ps.filt <-
+        Dher_ps |> 
+        preprocess_ps_sig()
+Dher_ps.filt |>
+        ggplot2::ggplot(aes(x = Signature.Female, colour = Signature.Female, y = rank)) |>
+        plot_style() +
+        ggplot2::labs(x = "signature", y = "phylorank",  
+                      title = "Desmarestia herbacea", subtitle = "female")
+Dher_ps.filt |>
+        ggplot2::ggplot(aes(x = Signature.Male, colour = Signature.Male, y = rank)) |>
+        plot_style() +
+        ggplot2::labs(x = "signature", y = "phylorank", 
+                      title = "Desmarestia herbacea", subtitle = "male")
+# expression
+Dher_ps.filt |>
+        ggplot2::ggplot(aes(x = Signature.Female, colour = Signature.Female, y = log2_TPM_plus_1.Female)) |>
+        plot_style() +
+        ggplot2::labs(x = "signature", y = "log(TPM+1)", 
+                      title = "Desmarestia herbacea", subtitle = "female")
+Dher_ps.filt |>
+        ggplot2::ggplot(aes(x = Signature.Male, colour = Signature.Male, y = log2_TPM_plus_1.Male)) |>
+        plot_style() +
+        ggplot2::labs(x = "signature", y = "log(TPM+1)",  
+                      title = "Desmarestia herbacea", subtitle = "male")
+```
+
+```{r}
+kruskal.test(log2_TPM_plus_1.Female ~ Signature.Female, data = Dher_ps.filt)
+kruskal.test(log2_TPM_plus_1.Male ~ Signature.Male, data = Dher_ps.filt)
+kruskal.test(rank ~ Signature.Female, data = Dher_ps.filt)
+kruskal.test(rank ~ Signature.Male, data = Dher_ps.filt)
+```
+
+Undaria
+
+```{r warning=FALSE, message=FALSE, fig.width=2.5, fig.height=3}
+Und_ps.filt <-
+        Und_ps |> 
+        preprocess_ps_sig()
+Und_ps.filt |>
+        ggplot2::ggplot(aes(x = Signature.Female, colour = Signature.Female, y = rank)) |>
+        plot_style() +
+        ggplot2::labs(x = "signature", y = "phylorank", 
+                      title = "Undaria", subtitle = "female")
+Und_ps.filt |>
+        ggplot2::ggplot(aes(x = Signature.Male, colour = Signature.Male, y = rank)) |>
+        plot_style() +
+        ggplot2::labs(x = "signature", y = "phylorank", 
+                      title = "Undaria", subtitle = "male")
+# expression
+Und_ps.filt |>
+        ggplot2::ggplot(aes(x = Signature.Female, colour = Signature.Female, y = log2_TPM_plus_1.Female)) |>
+        plot_style() +
+        ggplot2::labs(x = "signature", y = "log(TPM+1)", 
+                      title = "Undaria", subtitle = "female")
+Und_ps.filt |>
+        ggplot2::ggplot(aes(x = Signature.Male, colour = Signature.Male, y = log2_TPM_plus_1.Male)) |>
+        plot_style() +
+        ggplot2::labs(x = "signature", y = "log(TPM+1)", 
+                      title = "Undaria", subtitle = "male")
+```
+
+```{r}
+kruskal.test(log2_TPM_plus_1.Female ~ Signature.Female, data = Und_ps.filt)
+kruskal.test(log2_TPM_plus_1.Male ~ Signature.Male, data = Und_ps.filt)
+kruskal.test(rank ~ Signature.Female, data = Und_ps.filt)
+kruskal.test(rank ~ Signature.Male, data = Und_ps.filt)
+```
+
+Scytosiphon
+
+```{r warning=FALSE, message=FALSE, fig.width=2.5, fig.height=3}
+Spro_ps.filt <-
+        Spro_ps |> 
+        preprocess_ps_sig()
+Spro_ps.filt |>
+        ggplot2::ggplot(aes(x = Signature.Female, colour = Signature.Female, y = rank)) |>
+        plot_style() +
+        ggplot2::labs(x = "signature", y = "phylorank",
+                      title = "Scytosiphon", subtitle = "female")
+Spro_ps.filt |>
+        ggplot2::ggplot(aes(x = Signature.Male, colour = Signature.Male, y = rank)) |>
+        plot_style() +
+        ggplot2::labs(x = "signature", y = "phylorank",
+                      title = "Scytosiphon", subtitle = "male")
+# expression
+Spro_ps.filt |>
+        ggplot2::ggplot(aes(x = Signature.Female, colour = Signature.Female, y = log2_TPM_plus_1.Female)) |>
+        plot_style() +
+        ggplot2::labs(x = "signature", y = "log(TPM+1)",
+                      title = "Scytosiphon", subtitle = "female")
+Spro_ps.filt |>
+        ggplot2::ggplot(aes(x = Signature.Male, colour = Signature.Male, y = log2_TPM_plus_1.Male)) |>
+        plot_style() +
+        ggplot2::labs(x = "signature", y = "log(TPM+1)",
+                      title = "Scytosiphon", subtitle = "male")
+```
+
+```{r}
+kruskal.test(log2_TPM_plus_1.Female ~ Signature.Female, data = Spro_ps.filt)
+kruskal.test(log2_TPM_plus_1.Male ~ Signature.Male, data = Spro_ps.filt)
+kruskal.test(rank ~ Signature.Female, data = Spro_ps.filt)
+kruskal.test(rank ~ Signature.Male, data = Spro_ps.filt)
+```
+
+Schizocladia
+
+```{r warning=FALSE, message=FALSE, fig.width=2.5, fig.height=3}
+Si_ps.filt <-
+        Si_ps |> 
+        preprocess_ps_sig()
+Si_ps.filt |>
+        ggplot2::ggplot(aes(x = Signature, colour = Signature, y = rank)) |>
+        plot_style() +
+        ggplot2::labs(x = "signature", y = "phylorank", 
+                      title = "Schizocladia", subtitle = "unknown")
+# expression
+Si_ps.filt |>
+        ggplot2::ggplot(aes(x = Signature, colour = Signature, y = log2_TPM_plus_1)) |>
+        plot_style() +
+        ggplot2::labs(x = "signature", y = "log(TPM+1)", 
+                      title = "Schizocladia", subtitle = "unknown")
+```
+
+
+```{r}
+kruskal.test(log2_TPM_plus_1 ~ Signature, data = Si_ps.filt)
+kruskal.test(rank ~ Signature, data = Si_ps.filt)
+```
+
+Across all species, the MI is around 4 to 8%.
+
+# hPTM signatures and expression variability.
+
+## using the hourglass data
+
+using Ectocarpus data from hourglass
+
+```{r warning=FALSE, message=FALSE}
+library(tidyr); library(duckplyr)
+options(duckdb.materialize_message = FALSE)
+```
+
+
+```{r warning=FALSE, message=FALSE}
+Ec_TPM <- readr::read_csv("data/hourglass_data/Ec_abundance.csv") |> 
+        # dplyr::mutate(GeneID = stringr::str_remove(gene_id, "\\..$")) |>
+        tibble::column_to_rownames("GeneID")
+```
+
+```{r}
+# check Kryuchkova-Mostacci & Robinson-Rechavi for more functions to add.
+specificity <- function(abundance, measure = "tau"){
+        abundance_longer <- 
+                abundance |>
+                duckplyr::as_duckplyr_tibble() |>
+                duckplyr::select(1, where(is.numeric)) |>
+                tidyr::pivot_longer(!1, names_to = "sample", values_to = "TPM")
+        if(measure == "gini"){
+                breadth_out <- abundance_longer |>
+                        duckplyr::summarise(
+                                gini = DescTools::Gini(TPM),
+                                .by = GeneID
+                        )
+        } else if(measure == "tau"){
+                n_col <- ncol(abundance) - 1
+                breadth_out <- abundance_longer |>
+                        duckplyr::summarise(
+                                tau = sum(1 - (TPM/max(TPM)))/(n_col-1),
+                                .by = GeneID
+                        )
+        } else if(measure == "H"){
+                breadth_out <- abundance_longer |>
+                        duckplyr::summarise(
+                                H = DescTools::Entropy(TPM/sum(TPM)),
+                                .by = GeneID
+                        )
+        } else if(measure == "rH"){
+                # KL divergence from uniform distribution
+                n_col <- ncol(abundance) - 1
+                x_1 <- 
+                breadth_out <- abundance_longer |>
+                        duckplyr::mutate(
+                                # rH = entropy::KL.empirical(y1 = TPM/sum(TPM), y2 = 1/n_col),
+                                y1 = TPM/sum(TPM),
+                                y2 = 1/n_col,
+                                .by = GeneID
+                        ) |>
+                        duckplyr::summarise(
+                                rH = entropy::KL.empirical(y1, y2),
+                                .by = GeneID
+                        )
+        } else if(measure == "mean"){
+                # not really a specificity but useful nonetheless
+                breadth_out <- abundance_longer |>
+                        duckplyr::summarise(
+                                meanTPM = mean(TPM),
+                                .by = GeneID
+                        )
+        } else {
+                stop("Specify measure: \"gini\", \"tau\", \"H\", \"rH\", \"mean\"")
+        }
+        return(breadth_out)
+}
+```
+
+```{r message=FALSE, warning=FALSE, results='hide'}
+Ec_TPM.log2 <- log2(Ec_TPM + 1) |> tibble::rownames_to_column("GeneID")
+# Ec_TPM.log2 <- log2(Ec_TPM[,c(7:10)] + 1) |> tibble::rownames_to_column("GeneID")
+
+Ec_tau.log2 <- specificity(Ec_TPM.log2, measure = "tau")
+Ec_H.log2 <- specificity(Ec_TPM.log2, measure = "H")
+Ec_rH.log2 <- specificity(Ec_TPM.log2, measure = "rH")
+```
+
+```{r message=FALSE, warning=FALSE, results='hide'}
+Ec_combined <- 
+        Ec_ps.filt |> 
+        # dplyr::mutate(GeneID = stringr::str_remove(gene_id, "\\..$")) |>
+        dplyr::rename(GeneID = gene_id) |>
+        dplyr::inner_join(Ec_H.log2) |>
+        dplyr::inner_join(Ec_tau.log2) |>
+        dplyr::inner_join(Ec_rH.log2)
+```
+
+```{r warning=FALSE, message=FALSE, fig.width=2.5, fig.height=3}
+Ec_combined |>
+        ggplot2::ggplot(aes(x = Signature.Female, colour = Signature.Female, y = tau)) |>
+        plot_style() +
+        ggplot2::labs(x = "signature", y = "tau",
+                      title = "Ectocarpus", subtitle = "female")
+Ec_combined |>
+        ggplot2::ggplot(aes(x = Signature.Male, colour = Signature.Male, y = tau)) |>
+        plot_style() +
+        ggplot2::labs(x = "signature", y = "tau",
+                      title = "Ectocarpus", subtitle = "male")
+Ec_combined |>
+        ggplot2::ggplot(aes(x = Signature.Female, colour = Signature.Female, y = H)) |>
+        plot_style() +
+        ggplot2::labs(x = "signature", y = "H (bits)",
+                      title = "Ectocarpus", subtitle = "female")
+Ec_combined |>
+        ggplot2::ggplot(aes(x = Signature.Male, colour = Signature.Male, y = H)) |>
+        plot_style() +
+        ggplot2::labs(x = "signature", y = "H (bits)",
+                      title = "Ectocarpus", subtitle = "male")
+Ec_combined |>
+        ggplot2::ggplot(aes(x = Signature.Female, colour = Signature.Female, y = rH)) |>
+        plot_style() +
+        ggplot2::scale_y_log10(labels = label_log()) +
+        ggplot2::labs(x = "signature", y = "relative H (bits)",
+                      title = "Ectocarpus", subtitle = "female")
+Ec_combined |>
+        ggplot2::ggplot(aes(x = Signature.Male, colour = Signature.Male, y = rH)) |>
+        plot_style() +
+        ggplot2::scale_y_log10(labels = label_log()) +
+        ggplot2::labs(x = "signature", y = "relative H (bits)",
+                      title = "Ectocarpus", subtitle = "male")
+```
+
+It should be noted in these plots that tau, H and rH were computed using all data (not just restricted to just males or females).
+
+## using Jero's RNA-seq data
+
+```{r message=FALSE, warning=FALSE, results='hide'}
+selectGenes <- function(counts, min.count=3){
+  keep <-
+    counts[rowMeans(counts)>min.count, ]
+  return(keep)
+}
+# this is necessary because if the mean expression is 0, then we cannot compute the variability measures.
+# also, if mean expression is low, it might be noisy.
+```
+
+```{r message=FALSE, warning=FALSE, results='hide'}
+Ec_TPM.j <- readr::read_tsv("data/TPM/Ectocarpus-sp7-WT.tsv") |>
+        dplyr::select(GeneID = gene_id, where(is.numeric)) |>
+        tibble::column_to_rownames("GeneID") |>
+        selectGenes()
+Ddud_TPM.j <- readr::read_tsv("data/TPM/Desmarestia-dudresnayi.tsv") |>
+        dplyr::select(GeneID = gene_id, where(is.numeric)) |>
+        tibble::column_to_rownames("GeneID") |>
+        selectGenes()
+Dher_TPM.j <- readr::read_tsv("data/TPM/Desmarestia-herbacea.tsv") |>
+        dplyr::select(GeneID = tx, where(is.numeric)) |>
+        tibble::column_to_rownames("GeneID") |>
+        selectGenes()
+Und_TPM.j <- readr::read_tsv("data/TPM/Undaria-pinnatifida.tsv") |>
+        dplyr::select(GeneID = gene_id, where(is.numeric)) |>
+        tibble::column_to_rownames("GeneID") |>
+        selectGenes()
+Spro_TPM.j <- readr::read_tsv("data/TPM/Scytosiphon-promiscuus.tsv") |>
+        dplyr::select(GeneID = tx, where(is.numeric)) |>
+        tibble::column_to_rownames("GeneID") |>
+        selectGenes()
+Si_TPM.j <- readr::read_tsv("data/TPM/Schizocladia-ischiensis.tsv") |>
+        dplyr::select(GeneID = gene_id, where(is.numeric)) |>
+        dplyr::select(!dplyr::contains("RAP10_")) |>
+        tibble::column_to_rownames("GeneID") |>
+        selectGenes()
+```
+
+
+```{r message=FALSE, warning=FALSE, results='hide'}
+Ec_TPM.j.log2 <- log2(Ec_TPM.j + 1) |> tibble::rownames_to_column("GeneID")
+Ddud_TPM.j.log2 <- log2(Ddud_TPM.j + 1) |> tibble::rownames_to_column("GeneID")
+Dher_TPM.j.log2 <- log2(Dher_TPM.j + 1) |> tibble::rownames_to_column("GeneID")
+Und_TPM.j.log2 <- log2(Und_TPM.j + 1) |> tibble::rownames_to_column("GeneID")
+Spro_TPM.j.log2 <- log2(Spro_TPM.j + 1) |> tibble::rownames_to_column("GeneID")
+Si_TPM.j.log2 <- log2(Si_TPM.j + 1) |> tibble::rownames_to_column("GeneID")
+```
+
+```{r message=FALSE, warning=FALSE, results='hide'}
+Ec_combined.j <- 
+        Ec_ps.filt |> 
+        dplyr::rename(GeneID = gene_id) |>
+        dplyr::inner_join(specificity(Ec_TPM.j.log2, measure = "tau")) |>
+        dplyr::inner_join(specificity(Ec_TPM.j.log2, measure = "H")) |>
+        dplyr::inner_join(specificity(Ec_TPM.j.log2, measure = "rH"))
+Ddud_combined.j <- 
+        Ddud_ps.filt |> 
+        dplyr::rename(GeneID = gene_id) |>
+        dplyr::inner_join(specificity(Ddud_TPM.j.log2, measure = "tau")) |>
+        dplyr::inner_join(specificity(Ddud_TPM.j.log2, measure = "H")) |>
+        dplyr::inner_join(specificity(Ddud_TPM.j.log2, measure = "rH"))
+Dher_combined.j <- 
+        Dher_ps.filt |> 
+        dplyr::rename(GeneID = gene_id) |>
+        dplyr::inner_join(specificity(Dher_TPM.j.log2, measure = "tau")) |>
+        dplyr::inner_join(specificity(Dher_TPM.j.log2, measure = "H")) |>
+        dplyr::inner_join(specificity(Dher_TPM.j.log2, measure = "rH"))
+Und_combined.j <- 
+        Und_ps.filt |> 
+        dplyr::rename(GeneID = gene_id) |>
+        dplyr::inner_join(specificity(Und_TPM.j.log2, measure = "tau")) |>
+        dplyr::inner_join(specificity(Und_TPM.j.log2, measure = "H")) |>
+        dplyr::inner_join(specificity(Und_TPM.j.log2, measure = "rH"))
+Spro_combined.j <- 
+        Spro_ps.filt |> 
+        dplyr::rename(GeneID = gene_id) |>
+        dplyr::inner_join(specificity(Spro_TPM.j.log2, measure = "tau")) |>
+        dplyr::inner_join(specificity(Spro_TPM.j.log2, measure = "H")) |>
+        dplyr::inner_join(specificity(Spro_TPM.j.log2, measure = "rH"))
+Si_combined.j <- 
+        Si_ps.filt |> 
+        dplyr::rename(GeneID = gene_id) |>
+        dplyr::inner_join(specificity(Si_TPM.j.log2, measure = "tau")) |>
+        dplyr::inner_join(specificity(Si_TPM.j.log2, measure = "H")) |>
+        dplyr::inner_join(specificity(Si_TPM.j.log2, measure = "rH"))
+```
+
+```{r warning=FALSE, message=FALSE, fig.width=2.5, fig.height=3}
+Ec_combined.j |>
+        ggplot2::ggplot(aes(x = Signature.Female, colour = Signature.Female, y = tau)) |>
+        plot_style() +
+        ggplot2::labs(x = "signature", y = "tau",
+                      title = "Ectocarpus", subtitle = "female")
+Ec_combined.j |>
+        ggplot2::ggplot(aes(x = Signature.Male, colour = Signature.Male, y = tau)) |>
+        plot_style() +
+        ggplot2::labs(x = "signature", y = "tau",
+                      title = "Ectocarpus", subtitle = "male")
+Ec_combined.j |>
+        ggplot2::ggplot(aes(x = Signature.Female, colour = Signature.Female, y = rH)) |>
+        plot_style() +
+        ggplot2::scale_y_log10(labels = label_log()) +
+        ggplot2::labs(x = "signature", y = "relative H (bits)",
+                      title = "Ectocarpus", subtitle = "female")
+Ec_combined.j |>
+        ggplot2::ggplot(aes(x = Signature.Male, colour = Signature.Male, y = rH)) |>
+        plot_style() +
+        ggplot2::scale_y_log10(labels = label_log()) +
+        ggplot2::labs(x = "signature", y = "relative H (bits)",
+                      title = "Ectocarpus", subtitle = "male")
+```
+
+```{r warning=FALSE, message=FALSE, fig.width=2.5, fig.height=3}
+Ddud_combined.j |>
+        ggplot2::ggplot(aes(x = Signature, colour = Signature, y = tau)) |>
+        plot_style() +
+        ggplot2::labs(x = "signature", y = "tau",
+                      title = "Desmarestia dudresnayi", subtitle = "hermaphrodite")
+
+Ddud_combined.j |>
+        ggplot2::ggplot(aes(x = Signature, colour = Signature, y = rH)) |>
+        plot_style() +
+        ggplot2::scale_y_log10(labels = label_log()) +
+        ggplot2::labs(x = "signature", y = "relative H (bits)",
+                      title = "Desmarestia dudresnayi", subtitle = "hermaphrodite")
+```
+
+```{r warning=FALSE, message=FALSE, fig.width=2.5, fig.height=3}
+Dher_combined.j |>
+        ggplot2::ggplot(aes(x = Signature.Female, colour = Signature.Female, y = tau)) |>
+        plot_style() +
+        ggplot2::labs(x = "signature", y = "tau",
+                      title = "Desmarestia herbacea", subtitle = "female")
+Dher_combined.j |>
+        ggplot2::ggplot(aes(x = Signature.Male, colour = Signature.Male, y = tau)) |>
+        plot_style() +
+        ggplot2::labs(x = "signature", y = "tau",
+                      title = "Desmarestia herbacea", subtitle = "male")
+
+Dher_combined.j |>
+        ggplot2::ggplot(aes(x = Signature.Female, colour = Signature.Female, y = rH)) |>
+        plot_style() +
+        ggplot2::scale_y_log10(labels = label_log()) +
+        ggplot2::labs(x = "signature", y = "relative H (bits)",
+                      title = "Desmarestia herbacea", subtitle = "female")
+Dher_combined.j |>
+        ggplot2::ggplot(aes(x = Signature.Male, colour = Signature.Male, y = rH)) |>
+        plot_style() +
+        ggplot2::scale_y_log10(labels = label_log()) +
+        ggplot2::labs(x = "signature", y = "relative H (bits)",
+                      title = "Desmarestia herbacea", subtitle = "male")
+```
+
+```{r warning=FALSE, message=FALSE, fig.width=2.5, fig.height=3}
+Und_combined.j |>
+        ggplot2::ggplot(aes(x = Signature.Female, colour = Signature.Female, y = tau)) |>
+        plot_style() +
+        ggplot2::labs(x = "signature", y = "tau",
+                      title = "Undaria", subtitle = "female")
+Und_combined.j |>
+        ggplot2::ggplot(aes(x = Signature.Male, colour = Signature.Male, y = tau)) |>
+        plot_style() +
+        ggplot2::labs(x = "signature", y = "tau",
+                      title = "Undaria", subtitle = "male")
+
+Und_combined.j |>
+        ggplot2::ggplot(aes(x = Signature.Female, colour = Signature.Female, y = rH)) |>
+        plot_style() +
+        ggplot2::scale_y_log10(labels = label_log()) +
+        ggplot2::labs(x = "signature", y = "relative H (bits)",
+                      title = "Undaria", subtitle = "female")
+Und_combined.j |>
+        ggplot2::ggplot(aes(x = Signature.Male, colour = Signature.Male, y = rH)) |>
+        plot_style() +
+        ggplot2::scale_y_log10(labels = label_log()) +
+        ggplot2::labs(x = "signature", y = "relative H (bits)",
+                      title = "Undaria", subtitle = "male")
+```
+
+```{r warning=FALSE, message=FALSE, fig.width=2.5, fig.height=3}
+Spro_combined.j |>
+        ggplot2::ggplot(aes(x = Signature.Female, colour = Signature.Female, y = tau)) |>
+        plot_style() +
+        ggplot2::labs(x = "signature", y = "tau",
+                      title = "Scytosiphon promiscuus", subtitle = "female")
+Spro_combined.j |>
+        ggplot2::ggplot(aes(x = Signature.Male, colour = Signature.Male, y = tau)) |>
+        plot_style() +
+        ggplot2::labs(x = "signature", y = "tau",
+                      title = "Scytosiphon promiscuus", subtitle = "male")
+
+Spro_combined.j |>
+        ggplot2::ggplot(aes(x = Signature.Female, colour = Signature.Female, y = rH)) |>
+        plot_style() +
+        ggplot2::scale_y_log10(labels = label_log()) +
+        ggplot2::labs(x = "signature", y = "relative H (bits)",
+                      title = "Scytosiphon promiscuus", subtitle = "female")
+Spro_combined.j |>
+        ggplot2::ggplot(aes(x = Signature.Male, colour = Signature.Male, y = rH)) |>
+        plot_style() +
+        ggplot2::scale_y_log10(labels = label_log()) +
+        ggplot2::labs(x = "signature", y = "relative H (bits)",
+                      title = "Scytosiphon promiscuus", subtitle = "male")
+```
+
+```{r warning=FALSE, message=FALSE, fig.width=2.5, fig.height=3}
+Si_combined.j |>
+        ggplot2::ggplot(aes(x = Signature, colour = Signature, y = tau)) |>
+        plot_style() +
+        ggplot2::labs(x = "signature", y = "tau",
+                      title = "Schizocladia", subtitle = "unknown")
+Si_combined.j |>
+        ggplot2::ggplot(aes(x = Signature, colour = Signature, y = rH)) |>
+        plot_style() +
+        ggplot2::scale_y_log10(labels = label_log()) +
+        ggplot2::labs(x = "signature", y = "relative H (bits)",
+                      title = "Schizocladia", subtitle = "unknown")
+```
+
+It should be noted again that tau and rH were computed using all data (not just restricted to just males or females).
+
+```{r}
+# Ec
+kruskal.test(rH ~ Signature.Female, data = Ec_combined.j)
+# Ddud
+kruskal.test(rH ~ Signature, data = Ddud_combined.j)
+# Dher
+kruskal.test(rH ~ Signature.Female, data = Dher_combined.j)
+# Und
+kruskal.test(rH ~ Signature.Female, data = Und_combined.j)
+# Spro
+kruskal.test(rH ~ Signature.Female, data = Spro_combined.j)
+# Si
+kruskal.test(rH ~ Signature, data = Si_combined.j)
+```
+
+```{r warning=FALSE, message=FALSE}
+all_combined.j <- 
+        Dher_combined.j |> 
+        dplyr::select(Signature = Signature.Female, rank, rH) |> 
+        dplyr::mutate(sp = "Dher") |>
+        rbind(Ddud_combined.j |> 
+                      dplyr::select(Signature, rank, rH) |> 
+                      dplyr::mutate(sp = "Ddud")
+        ) |>
+        rbind(Si_combined.j |> 
+                      dplyr::select(Signature, rank, rH) |> 
+                      dplyr::mutate(sp = "Si")
+        ) |>
+        rbind(Spro_combined.j |> 
+                      dplyr::select(Signature = Signature.Female, rank, rH) |> 
+                      dplyr::mutate(sp = "Spro")
+        ) |>
+        rbind(Ec_combined.j |> 
+                      dplyr::select(Signature = Signature.Female, rank, rH) |> 
+                      dplyr::mutate(sp = "Ec")
+        ) |>
+        rbind(Und_combined.j|> 
+                      dplyr::select(Signature = Signature.Female, rank, rH) |> 
+                      dplyr::mutate(sp = "Und")
+        ) |>
+        dplyr::summarise(
+                median_rank = median(rank),
+                median_rH = median(rH),
+                mean_rH = mean(rH),
+                .by = c(sp, Signature)
+        )
+```
+
+```{r warning=FALSE, message=FALSE, fig.width=3.5, fig.height=2.5}
+cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+
+all_combined.j |>
+        ggplot2::ggplot(aes(x = Signature, y = median_rank, 
+                            colour = sp, group = sp)) +
+        ggplot2::geom_line(size = 1, alpha = 0.8) +
+        ggplot2::labs(x = "signature", y = "median phylorank", colour = "species") +
+        ggplot2::theme_classic() +
+        ggplot2::coord_flip() +
+        ggplot2::scale_x_discrete(limits=rev) +
+        ggplot2::scale_y_continuous(breaks = c(1,5,10)) +
+        ggplot2::scale_colour_manual(values=cbPalette)
+
+all_combined.j |>
+        ggplot2::ggplot(aes(x = Signature, y = median_rH, 
+                            colour = sp, group = sp)) +
+        ggplot2::geom_line(size = 1, alpha = 0.8) +
+        ggplot2::labs(x = "signature", y = "median rH (bits)", colour = "species") +
+        ggplot2::theme_classic() +
+        ggplot2::coord_flip() +
+        ggplot2::scale_x_discrete(limits=rev) +
+        ggplot2::scale_y_log10() +
+        # ggplot2::scale_y_continuous(breaks = scales::breaks_pretty()) +
+        ggplot2::scale_colour_manual(values=cbPalette)
+```
+
+
+# session info
+
+```{r}
+devtools::session_info()
+```

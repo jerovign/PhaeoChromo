@@ -1,0 +1,323 @@
+---
+title: "Signature profile of sex chromosomes vs autosomes"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+## HMG signature
+
+`Ec-13_001750` is the HMG gene in Ectocarpus. What is the signature and how does this differ in other species?
+
+```
+OG0000867	Ddudresnayi_g4067.t1, Ddudresnayi_g4067.t2, Ddudresnayi_g7528.t1, Ddudresnayi_g7528.t2	prot_D-herbacea_M_contig98.16175.1	Ec-13_001750.1	Upin_00015662	prot_S-ischiensis_contig127.2856.1, prot_S-ischiensis_contig86.20216.1	prot_S-promiscuus_M_contig1.143.1, prot_S-promiscuus_M_contig1.146.1
+```
+
+Let's check their signatures.
+
+```{r warning=FALSE, message=FALSE}
+library(tidyverse)
+library(tidymodels)
+library(readxl)
+```
+
+Read and make tx2gene file to replace gene IDs for some species
+
+```{r warning=FALSE, message=FALSE}
+Und_tx2gene <- readr::read_tsv("data/TPM/Und_tx2gene.tsv",col_select = c(1,2), col_names = c("tx", "gene_id"))
+Si_tx2gene <- readr::read_tsv("data/TPM/Schizocladia-ischiensis.tsv",col_select = c(1,2))
+```
+
+Read signature master file
+
+```{r warning=FALSE, message=FALSE}
+readxl::excel_sheets("data/dataset_S3_master_tables.xlsx")
+
+Ec_sig <- readxl::read_xlsx("data/dataset_S3_master_tables.xlsx", sheet = "Ectocarpus") |>
+        dplyr::select(gene_id, dplyr::contains("Signature"))
+Ddud_sig <- readxl::read_xlsx("data/dataset_S3_master_tables.xlsx", sheet = "Desmarestia-dudresnayi") |>
+        dplyr::select(gene_id, dplyr::contains("Signature"))
+Dher_sig <- readxl::read_xlsx("data/dataset_S3_master_tables.xlsx", sheet = "Desmarestia-herbacea") |>
+        dplyr::select(gene_id, dplyr::contains("Signature"))
+Spro_sig <- readxl::read_xlsx("data/dataset_S3_master_tables.xlsx", sheet = "Scitosyphon") |>
+        dplyr::select(gene_id, dplyr::contains("Signature"))
+
+# species where renaming is needed
+
+Und_sig <- readxl::read_xlsx("data/dataset_S3_master_tables.xlsx", sheet = "Undaria") |>
+        # rename gene_id
+        dplyr::left_join(Und_tx2gene) |> dplyr::select(-gene_id) |>
+        dplyr::select(gene_id = tx, dplyr::contains("Signature"))
+Si_sig <- readxl::read_xlsx("data/dataset_S3_master_tables.xlsx", sheet = "Schizocladia") |>
+        # rename gene_id
+        dplyr::left_join(Si_tx2gene) |> dplyr::select(-gene_id) |>
+        dplyr::select(gene_id = tx, dplyr::contains("Signature"))
+```
+
+Read and process orthogroup data to obtain one-to-one orthologues
+
+```{r warning=FALSE, message=FALSE}
+# filter longest isoform in Ectocarpus
+library(rtracklayer)
+
+Ec_data.gtf <- rtracklayer::import("data/annotation/Ec32_V5.longest_mRNA.SDR_F.AGAT.mod.gtf")
+Ec_data.gtf.df <- Ec_data.gtf |>
+        rtracklayer::as.data.frame() |>
+        dplyr::select(seqnames, gene_id) |>
+        dplyr::distinct()
+```
+
+```{r warning=FALSE, message=FALSE}
+og_data <-
+        readr::read_tsv("data/Orthogroups.tsv") |>
+        tidyr::drop_na() |>
+        tidyr::pivot_longer(
+                cols = -Orthogroup,
+                names_to = "species",
+                values_to = "gene_id"
+                ) |>
+        dplyr::filter(!is.na(gene_id)) |>
+        tidyr::separate_rows(gene_id, sep = ",\\s*") |>
+        dplyr::filter(gene_id != "") |>
+        # filter isoforms
+        dplyr::filter(!stringr::str_detect(gene_id, "\\.t[0-9]+$") | stringr::str_detect(gene_id, "\\.t1$")) |>
+        dplyr::filter(
+                (species == "PUBLIC_Ectocarpus-sp7_proteins" & gene_id %in% Ec_data.gtf.df$gene_id) |
+                        (species != "PUBLIC_Ectocarpus-sp7_proteins")
+        )
+                
+og_data2 <- 
+        og_data |>
+        dplyr::mutate(
+                gene_id = stringr::str_remove(gene_id, "\\.t1$"),
+                gene_id = stringr::str_replace(gene_id, "prot_", "mRNA_"),
+                species = dplyr::case_when(
+                        stringr::str_detect(species,"dudresnayi") ~ "Ddud",
+                        stringr::str_detect(species,"herbacea") ~ "Dher",
+                        stringr::str_detect(species,"Ectocarpus") ~ "Ec",
+                        stringr::str_detect(species,"Undaria") ~ "Und",
+                        stringr::str_detect(species,"Scytosiphon") ~ "Spro",
+                        stringr::str_detect(species,"Schizocladia") ~ "Si"
+                ))
+```
+
+```{r warning=FALSE, message=FALSE}
+sig.all <- 
+        Ec_sig |> dplyr::select(1,Signature.Female,Signature.Male) |>
+        dplyr::bind_rows(Ddud_sig) |>
+        dplyr::bind_rows(Dher_sig |> dplyr::select(1,Signature.Female,Signature.Male)) |>
+        dplyr::bind_rows(Spro_sig |> dplyr::select(1,Signature.Female,Signature.Male)) |>
+        dplyr::bind_rows(Und_sig |> dplyr::select(1,Signature.Female,Signature.Male)) |>
+        dplyr::bind_rows(Si_sig)
+
+
+og_data_sig <- 
+        og_data2 |> dplyr::filter(Orthogroup == "OG0000867") |>
+        dplyr::left_join(sig.all) |>
+        dplyr::select(-Orthogroup) |>
+        dplyr::distinct()
+
+og_data_sig[og_data_sig == "NA"] <- NA
+```
+
+```{r warning=FALSE, message=FALSE}
+og_data_sig |>
+        gt::gt()
+```
+
+Nothing so different to what we thought...
+
+
+## Signature difference between autosomes and sex chromosomes
+
+
+```{r warning=FALSE, message=FALSE}
+Ec_sig.chr <- 
+        Ec_sig |>
+        dplyr::left_join(Ec_data.gtf.df) |>
+        dplyr::mutate(chr_type = dplyr::case_when(
+                seqnames == "chr_13" ~ "sex",
+                .default = "autosome"
+        )) |>
+        dplyr::mutate(Signature.Female)
+
+Ec_sig.chr[Ec_sig.chr == "NA"] <- NA
+
+color_table <-
+        tibble::tibble(
+                Signature = paste0('S',1:16),
+                Colour = c("#a31d21", "#e43a30", "#f36f57", "#f8a68d", "#fddfd1", "#1b733b",
+            "#2daf66", "#6ec283", "#aed9b1", "#9392c8", "#bfbfdf", "#e9eef8",
+            "#2a74bb", "#61abd7", "#afd1e5", "#999999")
+        )
+```
+
+In Ectocarpus.
+
+```{r warning=FALSE, message=FALSE, fig.width=4, fig.height=5}
+Ec_sig.chr |>
+        dplyr::mutate(Signature.Female = factor(Signature.Female, levels = paste0('S',16:1))) |>
+        tidyr::drop_na() |>
+        ggplot2::ggplot(aes(x = chr_type, fill = Signature.Female)) +
+        ggplot2::geom_bar(position="fill") +
+        ggplot2::scale_y_continuous(labels = scales::percent) +
+        ggplot2::scale_fill_manual(values = setNames(color_table$Colour, color_table$sp)) +
+        ggplot2::labs(title = "Ectocarpus signature on chr_13",
+             x = "Chromosome type",
+             y = "Proportion of signatures",
+             fill = "Signature") +
+        ggplot2::theme_classic()
+
+Ec_sig.chr |>
+        dplyr::count(.by = chr_type)
+```
+
+
+And for other species.
+
+```{r warning=FALSE, message=FALSE}
+# Spro chr_13
+Spro_data.gtf <- rtracklayer::import("data/annotation/convert_gffread/Scytosiphon-promiscuus_MALE.chr.gffread.gff")
+Spro_data.gtf.df <- Spro_data.gtf |>
+        rtracklayer::as.data.frame() |>
+        dplyr::select(seqnames, gene_id = ID) |>
+        dplyr::distinct() |>
+        dplyr::mutate(sp = "Spro") |>
+        dplyr::mutate(chr_type = dplyr::case_when(
+                seqnames == "chr_13" ~ "sex",
+                .default = "autosome"
+        ))
+# Und HiC_scaffold_23
+# there are apparently 30 'chromosome-level' scaffolds.
+# I confirmed this with seqkit.
+Und_data.gtf <- rtracklayer::import("data/annotation/PUBLIC_Undaria-pinnatifida_MALE.jv3.gtf")
+Und_data.gtf.df <- Und_data.gtf |>
+        rtracklayer::as.data.frame() |>
+        dplyr::select(seqnames, gene_id = transcript_id) |>
+        dplyr::distinct() |>
+        dplyr::mutate(sp = "Und") |>
+        dplyr::mutate(chr_type = dplyr::case_when(
+                seqnames == "HiC_scaffold_23" ~ "sex",
+                .default = "autosome"
+        ))
+# Dher chr_03
+Dher_data.gtf <- rtracklayer::import("data/annotation/convert_gffread/Desmarestia-herbacea.reference.gt.AGAT.gffread.gff")
+Dher_data.gtf.df <- Dher_data.gtf |>
+        rtracklayer::as.data.frame() |>
+        dplyr::select(seqnames, gene_id = ID) |>
+        dplyr::distinct() |>
+        dplyr::mutate(sp = "Dher") |>
+        dplyr::mutate(chr_type = dplyr::case_when(
+                seqnames == "chr_03" ~ "sex",
+                .default = "autosome"
+        ))
+# Ddud pseudo-chr_03
+Ddud_data.gtf <- rtracklayer::import("data/annotation/Desmarestia-dudresnayi.cleaned2025.jv.gffread.gtf")
+Ddud_data.gtf.df <- Ddud_data.gtf |>
+        rtracklayer::as.data.frame() |>
+        dplyr::select(seqnames, gene_id = transcript_id) |>
+        dplyr::distinct() |>
+        dplyr::mutate(sp = "Ddud") |>
+        dplyr::mutate(chr_type = dplyr::case_when(
+                seqnames == "chr_03" ~ "pseudo-sex",
+                .default = "autosome"
+        )) |>
+        dplyr::mutate(gene_id = stringr::str_remove(gene_id, "\\.t1$")) # remove isoform suffix
+
+gtf.df.all <-
+        Ec_data.gtf.df |>
+        dplyr::mutate(sp = "Ec") |>
+        dplyr::mutate(chr_type = dplyr::case_when(
+                seqnames == "chr_13" ~ "sex",
+                .default = "autosome"
+        )) |>
+        rbind(Spro_data.gtf.df) |>
+        rbind(Und_data.gtf.df) |>
+        rbind(Dher_data.gtf.df) |>
+        rbind(Ddud_data.gtf.df)
+
+sig.all <- 
+        Ec_sig |> dplyr::select(1,Signature = Signature.Female) |>
+        rbind(Ddud_sig) |>
+        rbind(Dher_sig |> dplyr::select(1,Signature = Signature.Female)) |>
+        rbind(Spro_sig |> dplyr::select(1,Signature = Signature.Female)) |>
+        rbind(Und_sig |> dplyr::select(1,Signature = Signature.Female)) |>
+        rbind(Si_sig)
+
+sig.all[sig.all == "NA"] <- NA  # replace "NA" with NA
+
+sig.all.gtf.df.all <- 
+        sig.all |> 
+        dplyr::left_join(gtf.df.all) |>
+        dplyr::mutate(Signature = factor(Signature, levels = paste0('S',16:1)))
+
+rect_df <- sig.all.gtf.df.all |>
+        dplyr::distinct(sp) |>
+        dplyr::filter(sp == "Ddud") |>
+        dplyr::mutate(xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf) |>
+        dplyr::mutate(sp = factor(sp, levels = c(
+                "Ec", "Spro", "Und", "Dher", "Ddud"
+        )))
+```
+
+```{r warning=FALSE, message=FALSE, fig.width=6, fig.height=5}
+p_sig.all.gtf.df.all <- sig.all.gtf.df.all |>
+        dplyr::mutate(sp = factor(sp, levels = c(
+                "Ec", "Spro", "Und", "Dher", "Ddud"
+        ))) |>
+        tidyr::drop_na()
+
+p_sig.all.gtf.df.all |>
+        ggplot2::ggplot(aes(x = chr_type, fill = Signature)) +
+          # shading for monoicous species only
+          ggplot2::geom_rect(
+            data = rect_df,
+            aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+            inherit.aes = FALSE,
+            fill = "grey", alpha = 0.2
+          ) +
+          # the rest
+        ggplot2::geom_bar(position="fill") +
+        ggplot2::scale_y_continuous(labels = scales::percent) +
+        ggplot2::scale_fill_manual(values = setNames(color_table$Colour, color_table$sp)) +
+        ggplot2::labs(title = "All species",
+             x = "Chromosome type",
+             y = "Proportion of signatures",
+             fill = "Signature") +
+        ggplot2::theme_classic() +
+        ggplot2::facet_grid(.~ sp, scales = "free_x") +
+        ggplot2::guides(x = guide_axis(angle = 90))
+
+
+sig.all.gtf.df.all |>
+        tidyr::drop_na() |>
+        dplyr::summarise(n_genes = n(), .by = c(sp, chr_type))
+```
+
+
+
+```{r warning=FALSE, message=FALSE, fig.width=6, fig.height=3}
+p_sig.all.gtf.df.all |>
+  ggplot2::ggplot(aes(x = chr_type, fill = Signature)) +
+    # shading
+    ggplot2::geom_rect(
+      data = rect_df,
+      aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+      inherit.aes = FALSE,
+      fill = "grey", alpha = 0.3
+    ) +
+    ggplot2::geom_bar(position="fill") +
+    ggplot2::scale_y_continuous(labels = scales::percent) +
+    ggplot2::scale_fill_manual(values = setNames(color_table$Colour, color_table$sp)) +
+    ggplot2::labs(
+      title = "All species",
+      x = "Chromosome type",
+      y = "Proportion of signatures",
+      fill = "Signature"
+    ) +
+    ggplot2::theme_classic() +
+    ggplot2::facet_grid(. ~ sp, scales = "free_x") +
+    ggplot2::guides(x = guide_axis(angle = 90),
+                    fill=guide_legend(ncol=2))
+```

@@ -1,0 +1,142 @@
+---
+title: "RNA-seq correlation"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+Check for the correlation between samples in a RNA-seq experiment.
+
+```{r message=FALSE, warning=FALSE, results='hide'}
+selectGenes <- function(counts, min.count=3){
+  keep <-
+    counts[rowMeans(counts)>min.count, ]
+  return(keep)
+}
+# this is necessary because if the mean expression is 0, then we cannot compute the variability measures.
+# also, if mean expression is low, it might be noisy.
+```
+
+```{r message=FALSE, warning=FALSE, results='hide'}
+Ec_TPM.j <- readr::read_tsv("data/TPM/Ectocarpus-sp7-WT.tsv") |>
+        dplyr::select(GeneID = gene_id, where(is.numeric)) |>
+        tibble::column_to_rownames("GeneID") |>
+        selectGenes()
+Ddud_TPM.j <- readr::read_tsv("data/TPM/Desmarestia-dudresnayi.tsv") |>
+        dplyr::select(GeneID = gene_id, where(is.numeric)) |>
+        tibble::column_to_rownames("GeneID") |>
+        selectGenes()
+Dher_TPM.j <- readr::read_tsv("data/TPM/Desmarestia-herbacea.tsv") |>
+        dplyr::select(GeneID = tx, where(is.numeric)) |>
+        tibble::column_to_rownames("GeneID") |>
+        selectGenes()
+Und_TPM.j <- readr::read_tsv("data/TPM/Undaria-pinnatifida.tsv") |>
+        dplyr::select(GeneID = gene_id, where(is.numeric)) |>
+        tibble::column_to_rownames("GeneID") |>
+        selectGenes()
+Spro_TPM.j <- readr::read_tsv("data/TPM/Scytosiphon-promiscuus.tsv") |>
+        dplyr::select(GeneID = tx, where(is.numeric)) |>
+        tibble::column_to_rownames("GeneID") |>
+        selectGenes()
+Si_TPM.j <- readr::read_tsv("data/TPM/Schizocladia-ischiensis.tsv") |>
+        dplyr::select(GeneID = gene_id, where(is.numeric)) |>
+        dplyr::select(!dplyr::contains("RAP10_")) |>
+        tibble::column_to_rownames("GeneID") |>
+        selectGenes()
+```
+
+see columns
+
+```{r message=FALSE, warning=FALSE}
+colnames(Ec_TPM.j)
+colnames(Ddud_TPM.j)
+colnames(Dher_TPM.j)
+colnames(Und_TPM.j)
+colnames(Spro_TPM.j)
+colnames(Si_TPM.j)
+```
+
+rename columns
+
+```{r message=FALSE, warning=FALSE, results='hide'}
+colnames(Ec_TPM.j) <- 
+        c("Esp7_F1", "Esp7_F2", "Esp7_M1", "Esp7_M2") # after checking NCBI
+colnames(Ddud_TPM.j) <- 
+        c("Ddud_1", "Ddud_2", "Ddud_3")
+colnames(Dher_TPM.j) <- 
+        c("Dher_F1", "Dher_F2", "Dher_F3",
+          "Dher_M1", "Dher_M2", "Dher_M3")
+colnames(Und_TPM.j) <- 
+        c("Upin_F1", "Upin_F2", "Upin_F3", 
+          "Upin_M1", "Upin_M2", "Upin_M3")
+colnames(Spro_TPM.j) <- 
+        c("Spro_M1", "Spro_M2", "Spro_F1", 
+          "Spro_M3", "Spro_F2", "Spro_F3")
+Spro_TPM.j <- 
+        Spro_TPM.j |> dplyr::select(order(colnames(Spro_TPM.j)))
+colnames(Si_TPM.j) <- 
+        c("Sisc_1", "Sisc_2", "Sisc_3")
+```
+
+```{r message=FALSE, warning=FALSE, results='hide'}
+# check correlation using corrr::correlate (but not needed for the plot)
+corrr::correlate(Ec_TPM.j |> log1p())
+corrr::correlate(Ddud_TPM.j |> log1p())
+corrr::correlate(Dher_TPM.j |> log1p())
+corrr::correlate(Und_TPM.j |> log1p())
+corrr::correlate(Spro_TPM.j |> log1p())
+corrr::correlate(Si_TPM.j |> log1p())
+```
+
+```{r message=FALSE, warning=FALSE, results='hide'}
+library(ggplot2)
+```
+
+```{r message=FALSE, warning=FALSE, results='hide'}
+# a function with cor text on each tile (rounded to 0.00)
+# drop the diagonal and make it light grey on the plot.
+# Spearman correlation is used to avoid RNA-seq transformation issues.
+
+plot_correlation_heatmap <- function(data, title) {
+        cor_mat <- stats::cor(data, method = "spearman", use = "pairwise.complete.obs")
+        cor_df <- reshape2::melt(cor_mat) |>
+                dplyr::mutate(value = dplyr::case_when(
+                        Var1 == Var2 ~ NA_real_,
+                        TRUE ~ value
+                ))
+                # dplyr::filter(Var1 != Var2) # drop diagonal
+        
+        ggplot2::ggplot(cor_df, aes(Var1, Var2, fill = value, text = round(value, 2))) +
+                ggplot2::geom_tile() +
+                ggplot2::geom_text(ggplot2::aes(label = round(value, 2)), color = "black", size = 4) +
+                ggplot2::scale_fill_gradient2(low = "white", high = "red",
+                                     midpoint = 0.6, limit = c(0.6,1),
+                                     na.value = "grey90"   # <--- this makes NAs light grey
+                                     ) +
+                ggplot2::theme_minimal() +
+                # remove all background
+                ggplot2::theme(
+                        panel.background = ggplot2::element_blank(),
+                        plot.background = ggplot2::element_blank(),
+                        panel.grid.major = ggplot2::element_blank(),
+                        panel.grid.minor = ggplot2::element_blank(),
+                        axis.text.x = ggplot2::element_text(
+                                angle = 45, hjust = 1),
+                        axis.title.x = ggplot2::element_blank(),
+                        axis.title.y = ggplot2::element_blank(),
+                        legend.background = ggplot2::element_blank()
+                ) +
+                ggplot2::coord_fixed() +
+                ggplot2::labs(title = title, fill = "Spearman rho")
+}
+```
+
+```{r message=FALSE, warning=FALSE, results='hide', fig.width=4, fig.height=3}
+plot_correlation_heatmap(Ec_TPM.j, "Esp7")
+plot_correlation_heatmap(Ddud_TPM.j, "Ddud")
+plot_correlation_heatmap(Dher_TPM.j, "Dher")
+plot_correlation_heatmap(Und_TPM.j, "Upin")
+plot_correlation_heatmap(Spro_TPM.j, "Spro")
+plot_correlation_heatmap(Si_TPM.j, "Sisc")
+```
