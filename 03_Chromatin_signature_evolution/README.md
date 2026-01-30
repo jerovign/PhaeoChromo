@@ -22,4 +22,6 @@
 
 * `signature_orphan`: number of orphan genes in each signature. This is done for all species.
 
-Note: `|>` pipes are used here (introduced in `R 4.1.0`). Otherwise, `|>` should be replaced with `magrittr`'s `%>%`. Furthermore, `duckplyr v0.4.1` was used but the package has been updated since, resulting in some backcompatibility issues. This is easily resolved by changing `duckplyr::` to `dplyr::`, except for `duckplyr::as_duckdb_tibble()`.
+> [!NOTE] `|>` pipes are used here (introduced in `R 4.1.0`). Otherwise, `|>` should be replaced with `magrittr`'s `%>%`. Furthermore, `duckplyr v0.4.1` was used but the package has been updated since, resulting in some backcompatibility issues. This is easily resolved by changing `duckplyr::` to `dplyr::`, except for `duckplyr::as_duckdb_tibble()`.
+
+Further scripts used in the revisions are saved as PDFs in `revision_pdf`.

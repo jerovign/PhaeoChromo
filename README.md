@@ -1,7 +1,7 @@
 # PhaeoChromo
-### ***Emergence and evolution of chromatin landscapes across brown algae (Phaeophyceae)***
+### ***Evolution of a distinct chromatin regulatory landscape in brown algae***
 
-Jérômine Vigneau<sup>1,\*</sup>, Jaruwatana Sodai Lotharukpong<sup>1,\*</sup>, Pengfei Liu<sup>1</sup>, Rémy Luthringer<sup>1</sup>, Bérangère Lombard<sup>2</sup>, Damarys Loew<sup>2</sup>, Fabian Haas<sup>1</sup>, Michael Borg<sup>1,†</sup>, Susana M. Coelho<sup>1,†</sup> 
+Jérômine Vigneau<sup>1,\*</sup>, Jaruwatana Sodai Lotharukpong<sup>1,\*</sup>, Pengfei Liu<sup>1</sup>, Rémy Luthringer<sup>1</sup>, Bérangère Lombard<sup>2</sup>, Damarys Loew<sup>2</sup>, Fabian B. Haas<sup>1</sup>, Michael Borg<sup>1,†</sup>, Susana M. Coelho<sup>1,†</sup> 
 
 <sup>1</sup>Max Planck Institute for Biology, Tübingen, Germany
 
@@ -9,11 +9,13 @@ Jérômine Vigneau<sup>1,\*</sup>, Jaruwatana Sodai Lotharukpong<sup>1,\*</sup>,
 
 † Co-corresponding authors
 
+\* Equal contribution
+
 ## Overview
 
 This repository contains the analysis code and figure generation scripts associated with the study:
 
-> **Vigneau et al.** *Emergence and evolution of chromatin landscapes across brown algae*
+> **Vigneau et al.** * Evolution of a distinct chromatin regulatory landscape in brown algae*
 (manuscript in preparation)
 
 We investigate how chromatin landscapes emerged and diversified across multiple brown algal lineages. By combining genome-wide histone modification profiles, transcriptomics, and evolutionary analyses, we:
@@ -51,9 +53,9 @@ Preprocessing of sequencing data used:
 
 If you use this repository, please cite:
 
-> **Vigneau J., Lotharukpong J.S., Liu P., Luthringer R., Lombard B., Loew D., Haas F., Borg M.†, Coelho S.M.†**
+> **Vigneau J., Lotharukpong J.S., Liu P., Luthringer R., Lombard B., Loew D., Haas F.B., Borg M.†, Coelho S.M.†**
 > 
-> *Emergence and evolution of chromatin landscapes across brown algae.* (in preparation)
+> * Evolution of a distinct chromatin regulatory landscape in brown algae.* (in preparation)
 
 ## Contact
 Maintainer: Jérômine Vigneau
