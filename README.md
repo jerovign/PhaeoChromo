@@ -55,7 +55,7 @@ If you use this repository, please cite:
 
 > **Vigneau J., Lotharukpong J.S., Liu P., Luthringer R., Lombard B., Loew D., Haas F.B., Borg M.†, Coelho S.M.†**
 > 
-> * Evolution of a distinct chromatin regulatory landscape in brown algae.* (in preparation)
+> *Evolution of a distinct chromatin regulatory landscape in brown algae.* (in preparation)
 
 ## Contact
 Maintainer: Jérômine Vigneau
