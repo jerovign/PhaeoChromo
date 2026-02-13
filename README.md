@@ -1,4 +1,7 @@
 # PhaeoChromo
+
+[![DOI](https://zenodo.org/badge/1156982589.svg)](https://doi.org/10.5281/zenodo.18629747)
+
 ### ***Evolution of a distinct chromatin regulatory landscape in brown algae***
 
 Jérômine Vigneau<sup>1,\*</sup>, Jaruwatana Sodai Lotharukpong<sup>1,\*</sup>, Pengfei Liu<sup>1</sup>, Rémy Luthringer<sup>1</sup>, Bérangère Lombard<sup>2</sup>, Damarys Loew<sup>2</sup>, Fabian B. Haas<sup>1</sup>, Michael Borg<sup>1,†</sup>, Susana M. Coelho<sup>1,†</sup> 
@@ -15,7 +18,7 @@ Jérômine Vigneau<sup>1,\*</sup>, Jaruwatana Sodai Lotharukpong<sup>1,\*</sup>,
 
 This repository contains the analysis code and figure generation scripts associated with the study:
 
-> **Vigneau et al.** * Evolution of a distinct chromatin regulatory landscape in brown algae*
+> **Vigneau et al.** *Evolution of a distinct chromatin regulatory landscape in brown algae*
 (manuscript in preparation)
 
 We investigate how chromatin landscapes emerged and diversified across multiple brown algal lineages. By combining genome-wide histone modification profiles, transcriptomics, and evolutionary analyses, we:
@@ -29,7 +32,7 @@ We investigate how chromatin landscapes emerged and diversified across multiple 
 
 * `02_Make_chromatin_states_with_hiHMM_software/` — Notebooks explaining the workflow for making input files for hiHMM and running the software.
 
-* `03_Chromatin_signature_evolution/` - Notebooks explaining the workflows for comparative analysis of chromatin signatures across species. This also includes gene age, orphan gene and expression variability analysis for every species.
+* `03_Chromatin_signature_evolution/` - Notebooks explaining the workflows for comparative analysis of chromatin signatures across species. This also includes gene age, orphan gene and expression variability analysis for every species. 
 
 * `Scripts/` — Other R, Python, bash scripts used for specific tasks - written on the subfolder.
 
